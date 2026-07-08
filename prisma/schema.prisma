@@ -1,5 +1,8 @@
-// Prisma schema — Auth.js required tables.
-// See https://authjs.dev/getting-started/adapters/prisma for the shape.
+// Prisma schema.
+// - Auth.js tables (User/Account/Session/VerificationToken) are kept but unused
+//   right now because we're on JWT sessions. They're here so that if we later
+//   switch to DB sessions we don't need to reshape the DB.
+// - Conversation + Message are the actual product tables for M2.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,7 +13,7 @@ datasource db {
   // Prisma 7 loads the URL from prisma.config.ts (which reads DATABASE_URL from .env)
 }
 
-// -------- Auth.js core --------
+// -------- Auth.js scaffolding (unused right now — see auth.ts) --------
 
 model User {
   id            String    @id @default(cuid())
@@ -58,4 +61,30 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// -------- Chat (M2) --------
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String   // Google email from the JWT session — one owner per conversation
+  title     String   @default("New chat")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([userId, updatedAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String   // "user" | "assistant" | "system"
+  content        String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }

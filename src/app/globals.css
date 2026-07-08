@@ -1,10 +1,11 @@
 @import "tailwindcss";
+@import "highlight.js/styles/github-dark.css" layer(base);
 
 /*
-  Anthropic-inspired palette: warm cream light theme, warm charcoal dark theme,
-  with a terracotta accent (kept in reserve for later components).
-  Full dark/light/system support via prefers-color-scheme. next-themes will
-  layer on top of this for explicit toggle support (added in a later commit).
+  Anthropic-inspired palette. Warm cream light + warm charcoal dark, with a
+  terracotta accent. next-themes writes `class="dark"` on <html> when the
+  effective theme is dark, so we drive dark styles off that class (and *also*
+  respect prefers-color-scheme for the initial system default).
 */
 
 :root {
@@ -13,6 +14,24 @@
   --muted-foreground: #6b6a66;   /* softened ink */
   --border: rgba(26, 25, 23, 0.12);
   --accent: #cc7d59;             /* terracotta */
+}
+
+.dark {
+  --background: #1a1917;         /* warm charcoal */
+  --foreground: #f4f1ea;         /* warm cream */
+  --muted-foreground: #9a9791;
+  --border: rgba(244, 241, 234, 0.14);
+  --accent: #d99070;             /* terracotta, brightened for dark */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: #1a1917;
+    --foreground: #f4f1ea;
+    --muted-foreground: #9a9791;
+    --border: rgba(244, 241, 234, 0.14);
+    --accent: #d99070;
+  }
 }
 
 @theme inline {
@@ -25,18 +44,13 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1a1917;       /* warm charcoal */
-    --foreground: #f4f1ea;       /* warm cream */
-    --muted-foreground: #9a9791;
-    --border: rgba(244, 241, 234, 0.14);
-    --accent: #d99070;           /* terracotta, brightened for dark */
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Tighten the highlight.js theme so code blocks fit the dark warm palette. */
+.hljs {
+  background: transparent !important;
 }
