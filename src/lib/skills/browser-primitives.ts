@@ -14,9 +14,17 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+export const browserNewTab = tool({
+  description:
+    "Open a URL in a NEW tab. ALWAYS use this instead of browser_navigate when the user is currently on the Alpha Assist chat — you must not overwrite their current tab. Returns the new tab_id, which subsequent browser_* calls can address via the active tab (the new tab becomes active).",
+  inputSchema: z.object({
+    url: z.string().describe("Full URL to open."),
+  }),
+});
+
 export const browserNavigate = tool({
   description:
-    "Open a URL in the active tab (or a new tab if none is suitable). Use this to reach the search page of a site the user is signed into (e.g. workit.info).",
+    "Navigate the *currently active* tab to a URL. Only use this if you already opened a dedicated tab via browser_new_tab. Do NOT use this on the user's first turn — it will replace whatever they were looking at.",
   inputSchema: z.object({
     url: z.string().describe("Full URL to navigate to."),
   }),

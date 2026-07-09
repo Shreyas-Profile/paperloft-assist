@@ -10,6 +10,7 @@
 
 import { findOpportunitiesTool } from "./find-opportunities";
 import {
+  browserNewTab,
   browserNavigate,
   browserSnapshot,
   browserClick,
@@ -21,6 +22,7 @@ export const skills = {
   // Server-side
   find_opportunities: findOpportunitiesTool,
   // Client-side (executed in the user's Chrome via chrome-agent extension)
+  browser_new_tab: browserNewTab,
   browser_navigate: browserNavigate,
   browser_snapshot: browserSnapshot,
   browser_click: browserClick,

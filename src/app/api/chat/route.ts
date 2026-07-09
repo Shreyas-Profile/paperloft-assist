@@ -15,11 +15,7 @@ import { NextResponse } from "next/server";
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
 
 import { auth } from "@/lib/auth";
-import {
-  appendMessage,
-  createConversation,
-  getContextMessages,
-} from "@/lib/chat";
+import { appendMessage, createConversation } from "@/lib/chat";
 import { CHAT_MODEL, SYSTEM_PROMPT, openrouter } from "@/lib/openrouter";
 import { skills } from "@/lib/skills";
 
@@ -46,6 +42,10 @@ export async function POST(req: Request) {
     messages: UIMessage[];
   };
   const uiMessages = body.messages ?? [];
+  const lastMessage = uiMessages[uiMessages.length - 1];
+  if (!lastMessage) {
+    return NextResponse.json({ error: "no messages" }, { status: 400 });
+  }
   const lastUserMessage = [...uiMessages].reverse().find((m) => m.role === "user");
   if (!lastUserMessage) {
     return NextResponse.json({ error: "no user message" }, { status: 400 });
@@ -59,32 +59,40 @@ export async function POST(req: Request) {
     conversationId = created.id;
   }
 
-  // Persist the incoming user message before we call the LLM — that way if the
-  // model call fails, the user's text isn't lost.
-  await appendMessage(conversationId, "user", lastUserText);
+  // Persist the user message ONLY on the initial send of a turn — i.e., when
+  // the last message in the client's state is a fresh user message. On
+  // auto-resends triggered by client-side tool results, the last message is
+  // an assistant tool-call or a tool result, and we must not re-persist.
+  if (lastMessage.role === "user") {
+    await appendMessage(conversationId, "user", lastUserText);
+  }
 
-  // Build the message array for the LLM: last N messages of persisted history,
-  // fed as model messages. System prompt is set via `system` on streamText below.
-  const historyRows = await getContextMessages(conversationId);
-  const historyAsUiMessages: UIMessage[] = historyRows.map((row, i) => ({
-    id: `hist-${i}`,
-    role: row.role as UIMessage["role"],
-    parts: [{ type: "text", text: row.content }],
-  }));
-
+  // Send the client's full UIMessage stream to the LLM. This includes prior
+  // assistant tool calls and their results, which is critical for the LLM to
+  // "remember" what it already did in this turn (e.g., it already opened a
+  // workit tab — don't open another). We can't rebuild that from the DB
+  // because tool state isn't persisted.
   const result = streamText({
     // .chat() forces the classic /v1/chat/completions endpoint. Without it,
     // @ai-sdk/openai defaults to OpenAI's newer /v1/responses API, which
     // OpenRouter doesn't implement for most models (including DeepSeek).
     model: openrouter.chat(CHAT_MODEL),
     system: SYSTEM_PROMPT,
-    messages: await convertToModelMessages(historyAsUiMessages),
+    messages: await convertToModelMessages(uiMessages),
     // Skills the LLM can invoke via tool-calling. Each returns data the model
     // then reads in a follow-up step.
     tools: skills,
-    // Allow up to 5 model steps per turn — the LLM may call a tool, read the
-    // result, and reply. Without this it'd stop after one step.
+    // Cap per-server-round steps. The full loop is bounded by the client's
+    // sendAutomaticallyWhen guard (15 assistant turns total).
     stopWhen: stepCountIs(5),
+    // Disable parallel tool calls — the browser tools are stateful (opening
+    // a tab affects the next snapshot). Without this, the LLM cheerfully
+    // issues 5 identical browser_new_tab calls in one step, spawning 5 tabs.
+    providerOptions: {
+      openai: {
+        parallelToolCalls: false,
+      },
+    },
     onFinish: async ({ text }) => {
       // Only the final assistant text is persisted. Tool calls and their
       // results are transient — they're visible during streaming but not

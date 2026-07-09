@@ -25,10 +25,7 @@ type ChromeMinimal = {
 
 export type ExtensionReply = { ok: true; result: unknown } | { ok: false; error: string };
 
-export async function callExtension(
-  cmd: string,
-  args: unknown,
-): Promise<unknown> {
+function rawCall(cmd: string, args: unknown): Promise<unknown> {
   const id = process.env.NEXT_PUBLIC_ALPHA_ASSIST_EXTENSION_ID;
   if (!id) {
     throw new Error(
@@ -43,8 +40,6 @@ export async function callExtension(
   }
 
   return new Promise((resolve, reject) => {
-    // Wrapped in setTimeout(0) so the extension isn't hit from within a React
-    // render cycle — tolerates weird timing without an explicit useEffect.
     setTimeout(() => {
       try {
         chromeApi.runtime!.sendMessage!(id, { cmd, args }, (reply) => {
@@ -60,4 +55,45 @@ export async function callExtension(
       }
     }, 0);
   });
+}
+
+// Dedup guard for browser_new_tab. Even with parallelToolCalls: false, a
+// confused LLM might still ask us to open the same URL twice. If we already
+// have a tab on that URL (or a same-origin URL for the same site), return
+// its id instead of spawning a duplicate.
+async function newTabDedup(args: { url?: string }): Promise<unknown> {
+  const wantUrl = args?.url;
+  if (!wantUrl) return rawCall("browser_new_tab", args);
+  try {
+    const tabs = (await rawCall("browser_list_tabs", {})) as Array<{
+      id: number;
+      url: string;
+      title?: string;
+    }>;
+    const wantOrigin = new URL(wantUrl).origin;
+    const existing = tabs.find((t) => {
+      try {
+        return new URL(t.url).origin === wantOrigin;
+      } catch {
+        return false;
+      }
+    });
+    if (existing) {
+      await rawCall("browser_activate_tab", { tab_id: existing.id });
+      return { tab_id: existing.id, url: existing.url, reused: true };
+    }
+  } catch {
+    // Fall through to a plain new_tab if listing fails for any reason.
+  }
+  return rawCall("browser_new_tab", args);
+}
+
+export async function callExtension(
+  cmd: string,
+  args: unknown,
+): Promise<unknown> {
+  if (cmd === "browser_new_tab") {
+    return newTabDedup(args as { url?: string });
+  }
+  return rawCall(cmd, args);
 }
