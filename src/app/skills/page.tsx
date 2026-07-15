@@ -29,24 +29,6 @@ type SkillEntry = {
 
 const SKILLS: SkillEntry[] = [
   {
-    id: "chat",
-    name: "Conversational chat",
-    category: "Core",
-    description:
-      "Streaming chat with a top-tier model. Markdown, code blocks, and history synced across devices.",
-    price: "Free",
-    status: "available",
-  },
-  {
-    id: "find_opportunities",
-    name: "UK apprenticeship search",
-    category: "Public web",
-    description:
-      "Searches gov.uk apprenticeships, T-Level placements, and industry-listed schemes. No login needed.",
-    price: "Free",
-    status: "available",
-  },
-  {
     id: "telegram_mcp",
     name: "Telegram bridge",
     category: "External MCP · Globalion",
@@ -73,65 +55,6 @@ const SKILLS: SkillEntry[] = [
       url: "https://video-render.regiq.in",
       publisher: "Globalion (Pawan)",
     },
-  },
-  {
-    id: "workit_browser",
-    name: "Workit placement search",
-    category: "Login-gated",
-    description:
-      "Drives your logged-in Chrome to search workit.info for placements matching your filters (subject, location, on-site vs virtual).",
-    price: "Free",
-    status: "beta",
-    needs: "Chrome + chrome-agent extension",
-  },
-  {
-    id: "linkedin_post",
-    name: "LinkedIn posting",
-    category: "Social",
-    description:
-      "Draft and publish updates to your LinkedIn feed. Great for sharing project milestones on a sporadic cadence.",
-    price: "Free",
-    status: "soon",
-    needs: "Connect LinkedIn (one-time OAuth)",
-  },
-  {
-    id: "document_store",
-    name: "Document store",
-    category: "Storage",
-    description:
-      "Upload PDFs and PowerPoints, ask questions about them, or have Alpha Assist generate new ones. Files live in encrypted S3.",
-    price: "Free",
-    status: "soon",
-  },
-  {
-    id: "calendar",
-    name: "Calendar",
-    category: "Productivity",
-    description:
-      "Read your calendar to find free slots, draft invites, and reschedule around conflicts.",
-    price: "Free",
-    status: "soon",
-    needs: "Connect Google Calendar",
-  },
-  {
-    id: "github",
-    name: "GitHub",
-    category: "Developer",
-    description:
-      "Read your repos, open issues, review pull requests, and post release notes from natural-language prompts.",
-    price: "Free",
-    status: "soon",
-    needs: "GitHub OAuth",
-  },
-  {
-    id: "outlook",
-    name: "Outlook / Gmail",
-    category: "Email",
-    description:
-      "Triage your inbox, draft replies in your voice, and send messages after you approve.",
-    price: "Free",
-    status: "soon",
-    needs: "Connect email provider",
   },
 ];
 
