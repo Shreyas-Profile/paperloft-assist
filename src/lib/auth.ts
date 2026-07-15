@@ -26,7 +26,15 @@ const PROVIDER_AUTO_ENABLE: Record<string, string> = {
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  // Sign-in is expensive (OTP round-trip, or a Google popup). Once a user
+  // proves who they are, keep them signed in for a year and roll the expiry
+  // forward every day they use the app. Effectively: sign in once per
+  // browser, then never again unless they clear cookies or sign out.
+  session: {
+    strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 365,
+    updateAge: 60 * 60 * 24,
+  },
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
