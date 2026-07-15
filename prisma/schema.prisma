@@ -159,3 +159,20 @@ model UserChannelPref {
 
   @@map("user_channel_prefs")
 }
+
+// Short-lived OTP codes for WhatsApp / Telegram sign-in.
+// `identifier` = phone number (E.164) for whatsapp, or telegram chatId
+// (string) for telegram. Consumed once via /api/auth/otp/verify.
+model SignInCode {
+  id         String    @id @default(cuid())
+  provider   String    // "whatsapp" | "telegram"
+  identifier String    // phone (E.164) or telegram chatId
+  code       String    // 6-digit numeric
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([provider, identifier])
+  @@index([expiresAt])
+  @@map("sign_in_codes")
+}

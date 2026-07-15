@@ -28,7 +28,11 @@ export async function POST(req: Request) {
   const code = await createSignInCode(provider, identifier);
   const send = await sendOtp(provider, identifier, code);
   if (!send.ok) {
-    return NextResponse.json({ error: send.reason }, { status: 502 });
+    // 4xx not 5xx — this is almost always a user-input problem (bad phone
+    // number, no active WhatsApp on it, or unstarted Telegram bot). Cloudflare
+    // swallows 5xx from origin and replaces the body with its own error page.
+    console.warn(`[otp/send] delivery failed for ${provider}: ${send.reason}`);
+    return NextResponse.json({ error: `Couldn't send code: ${send.reason}` }, { status: 422 });
   }
   return NextResponse.json({ ok: true });
 }
