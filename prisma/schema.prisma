@@ -160,9 +160,26 @@ model UserChannelPref {
   @@map("user_channel_prefs")
 }
 
+// Phone → Telegram chatId mapping. Written by the bot webhook when a user
+// taps "Share Contact" — Telegram itself signs the phone number, so this is
+// how we trust that chatId X really belongs to phone +Y. Anyone can spoof
+// a chatId to us; nobody can spoof a Telegram-verified phone.
+model TelegramPhoneMap {
+  phone      String   @id                       // E.164, e.g. "+447404660489"
+  chatId     String                             // Telegram chat_id (numeric, stored as string)
+  firstName  String?
+  username   String?
+  verifiedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([chatId])
+  @@map("telegram_phone_map")
+}
+
 // Short-lived OTP codes for WhatsApp / Telegram sign-in.
-// `identifier` = phone number (E.164) for whatsapp, or telegram chatId
-// (string) for telegram. Consumed once via /api/auth/otp/verify.
+// `identifier` = phone number (E.164) for BOTH providers. For Telegram we
+// look up the chatId via TelegramPhoneMap. Consumed once via
+// /api/auth/otp/verify.
 model SignInCode {
   id         String    @id @default(cuid())
   provider   String    // "whatsapp" | "telegram"

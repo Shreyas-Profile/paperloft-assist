@@ -55,7 +55,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       id: "telegram",
       name: "Telegram",
       credentials: {
-        identifier: { label: "Telegram chat id", type: "text" },
+        identifier: { label: "Phone (E.164)", type: "text" },
         code: { label: "Code", type: "text" },
       },
       async authorize(creds) {
@@ -70,22 +70,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const skillId = PROVIDER_AUTO_ENABLE[provider];
       if (skillId) enableSkill(user.email, skillId).catch(() => undefined);
       // Persist per-channel identifiers so the reminders scheduler can deliver
-      // without asking the user again.
+      // without asking the user again. Both providers store the phone;
+      // Telegram deliveries resolve chat via TelegramPhoneMap.
       if (provider === "whatsapp" || provider === "telegram") {
-        // synthetic emails encode the identifier before the "@"
-        const identifier = user.email.split("@")[0];
+        const phone = user.email.split("@")[0];
+        const map =
+          provider === "telegram"
+            ? await prisma.telegramPhoneMap.findUnique({ where: { phone } }).catch(() => null)
+            : null;
         await prisma.userChannelPref
           .upsert({
             where: { userId: user.email },
             create: {
               userId: user.email,
-              whatsappNumber: provider === "whatsapp" ? identifier : undefined,
-              telegramChatId: provider === "telegram" ? identifier : undefined,
-              defaultChannel: provider === "whatsapp" ? "whatsapp" : "telegram",
+              whatsappNumber: phone,
+              telegramChatId: map?.chatId,
+              defaultChannel: provider,
             },
             update: {
-              whatsappNumber: provider === "whatsapp" ? identifier : undefined,
-              telegramChatId: provider === "telegram" ? identifier : undefined,
+              whatsappNumber: phone,
+              telegramChatId: map?.chatId ?? undefined,
             },
           })
           .catch(() => undefined);
@@ -101,15 +105,11 @@ async function authorizeOtp(
   provider: OtpProvider,
   creds: Partial<Record<"identifier" | "code", unknown>> | undefined,
 ) {
-  const identifier = String(creds?.identifier ?? "").trim();
+  const phone = String(creds?.identifier ?? "").trim();
   const code = String(creds?.code ?? "").trim();
-  if (!identifier || !code) return null;
-  const ok = await verifySignInCode(provider, identifier, code);
+  if (!phone || !code) return null;
+  const ok = await verifySignInCode(provider, phone, code);
   if (!ok) return null;
-  const email = syntheticEmail(provider, identifier);
-  return {
-    id: email,
-    email,
-    name: provider === "whatsapp" ? identifier : `Telegram ${identifier}`,
-  };
+  const email = syntheticEmail(phone);
+  return { id: email, email, name: phone };
 }

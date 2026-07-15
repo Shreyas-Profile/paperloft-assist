@@ -1,27 +1,74 @@
 // Telegram bot webhook for the Paperloft Assist sign-in bot.
 //
 // URL: /api/telegram/bot-webhook/<TELEGRAM_WEBHOOK_SECRET>
-// Registered via `setWebhook` at deploy time (see scripts / manual).
 //
-// When a user sends /start to the bot, we reply with their chatId so they
-// can paste it into the sign-in UI. That chatId is then used as their
-// Telegram "identifier" for OTP delivery.
+// Two incoming events matter:
+//
+//   1. `/start` — user opened a fresh DM. We reply with a `request_contact`
+//      keyboard button. Only the user's real Telegram-account phone number
+//      can come back through that button (Telegram enforces this).
+//
+//   2. `message.contact` — user tapped Share. Telegram sends the phone number
+//      alongside chat/from info. We store the mapping in TelegramPhoneMap so
+//      /api/auth/otp/send (telegram) can find their chatId later.
 
 import { NextResponse } from "next/server";
 import { sendTelegramToChatId } from "@/lib/telegram-bot";
+import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
+
+interface TgContact {
+  phone_number: string;
+  user_id?: number;
+  first_name?: string;
+}
 
 interface TgMessage {
   message_id: number;
   chat: { id: number; type: string };
   from?: { id: number; username?: string; first_name?: string };
   text?: string;
+  contact?: TgContact;
 }
 
 interface TgUpdate {
   update_id: number;
   message?: TgMessage;
+}
+
+const API = "https://api.telegram.org/bot";
+
+async function sendWithKeyboard(chatId: string, text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  await fetch(`${API}${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        keyboard: [[{ text: "📱 Share my phone number", request_contact: true }]],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      },
+    }),
+  }).catch(() => undefined);
+}
+
+async function ackAndClearKeyboard(chatId: string, text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  await fetch(`${API}${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      reply_markup: { remove_keyboard: true },
+    }),
+  }).catch(() => undefined);
 }
 
 export async function POST(
@@ -35,21 +82,45 @@ export async function POST(
   }
   const update = (await req.json().catch(() => null)) as TgUpdate | null;
   const msg = update?.message;
-  if (!msg?.text) return NextResponse.json({ ok: true });
+  if (!msg) return NextResponse.json({ ok: true });
 
   const chatId = String(msg.chat.id);
-  const text = msg.text.trim();
 
-  if (text.startsWith("/start")) {
-    const reply = [
-      "Welcome to Paperloft Assist sign-in.",
-      "",
-      "Your Telegram sign-in id:",
-      `<code>${chatId}</code>`,
-      "",
-      "Copy that id and paste it into the Paperloft Assist sign-in page. We'll send you a one-time code here to finish.",
-    ].join("\n");
-    await sendTelegramToChatId(chatId, reply).catch(() => undefined);
+  // --- Share Contact flow ------------------------------------------------
+  if (msg.contact?.phone_number) {
+    // Telegram may or may not include the leading "+" — normalise to E.164.
+    const raw = msg.contact.phone_number.trim();
+    const phone = raw.startsWith("+") ? raw : `+${raw}`;
+    await prisma.telegramPhoneMap
+      .upsert({
+        where: { phone },
+        create: {
+          phone,
+          chatId,
+          firstName: msg.contact.first_name ?? msg.from?.first_name ?? null,
+          username: msg.from?.username ?? null,
+        },
+        update: {
+          chatId,
+          firstName: msg.contact.first_name ?? msg.from?.first_name ?? null,
+          username: msg.from?.username ?? null,
+        },
+      })
+      .catch(() => undefined);
+    await ackAndClearKeyboard(
+      chatId,
+      `✅ Linked ${phone} to your Telegram.\n\nGo back to paperloft.regiq.in/signin, pick the Telegram tab, enter ${phone}, and hit "Send code".`,
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  // --- /start ------------------------------------------------------------
+  if (msg.text?.startsWith("/start")) {
+    await sendWithKeyboard(
+      chatId,
+      "Welcome to Paperloft Assist.\n\nTap the button below to share your phone number so I can send you sign-in codes and reminders.",
+    );
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ ok: true });

@@ -1,10 +1,11 @@
 "use client";
 
 // Tabbed sign-in — Google, WhatsApp OTP, Telegram OTP.
-// The two OTP flows have the same shape:
-//   1. Enter identifier (phone / chatId) → POST /api/auth/otp/send
-//   2. Enter received code → signIn("whatsapp" | "telegram", { identifier, code })
-// The server credentials provider validates + creates the session.
+// Both OTP flows use the user's phone number in E.164 format. Telegram
+// requires a one-time link step: user opens @shreyasassistantbot, hits
+// /start, taps Share Contact — the bot stores phone→chatId, then we can
+// DM their code. If they hit "Send code" before linking, the API returns
+// HTTP 428 and we show a deep-link to the bot.
 
 import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
@@ -70,8 +71,8 @@ function OtpForm({
   provider: "whatsapp" | "telegram";
   callbackUrl: string;
 }) {
-  const [step, setStep] = useState<"identifier" | "code">("identifier");
-  const [identifier, setIdentifier] = useState("");
+  const [step, setStep] = useState<"phone" | "link-telegram" | "code">("phone");
+  const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -83,9 +84,13 @@ function OtpForm({
       const res = await fetch("/api/auth/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, identifier: identifier.trim() }),
+        body: JSON.stringify({ provider, phone: phone.trim() }),
       });
       const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (res.status === 428) {
+        setStep("link-telegram");
+        return;
+      }
       if (!res.ok) {
         setError(j.error ?? "Failed to send code.");
         return;
@@ -99,7 +104,7 @@ function OtpForm({
     setError(null);
     startTransition(async () => {
       const result = await signIn(provider, {
-        identifier: identifier.trim(),
+        identifier: phone.trim(),
         code: code.trim(),
         callbackUrl,
         redirect: false,
@@ -112,38 +117,74 @@ function OtpForm({
     });
   };
 
-  if (step === "identifier") {
+  if (step === "link-telegram") {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-lg border border-accent/40 bg-accent/10 p-3 text-sm space-y-2">
+          <p className="font-medium">Link your Telegram first</p>
+          <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
+            <li>
+              Open{" "}
+              <a
+                href="https://t.me/shreyasassistantbot"
+                target="_blank"
+                className="text-accent underline"
+                rel="noreferrer"
+              >
+                @shreyasassistantbot
+              </a>
+            </li>
+            <li>Send <code className="rounded bg-foreground/10 px-1">/start</code></li>
+            <li>Tap <b>📱 Share my phone number</b></li>
+            <li>Come back here and hit Retry</li>
+          </ol>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setStep("phone")}
+            className="px-3 py-2 rounded-md border border-border text-sm hover:bg-foreground/5"
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={sendCode}
+            disabled={pending}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-60"
+          >
+            {pending ? "Retrying…" : "Retry"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "phone") {
     return (
       <form onSubmit={sendCode} className="space-y-3">
-        {provider === "telegram" ? (
-          <p className="text-xs text-muted-foreground">
-            First, open{" "}
-            <a
-              href="https://t.me/shreyasassistantbot"
-              target="_blank"
-              className="text-accent underline"
-              rel="noreferrer"
-            >
-              @shreyasassistantbot
-            </a>{" "}
-            and send <code className="rounded bg-foreground/10 px-1">/start</code>. Copy the id it replies with and paste it below.
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Enter your WhatsApp number in international format (e.g. +447700900123). We&apos;ll text you a 6-digit code.
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          {provider === "telegram" ? (
+            <>
+              Enter the phone number connected to your Telegram account (international format,
+              e.g. +447700900123). First time only, you&apos;ll be asked to link Telegram to
+              this number.
+            </>
+          ) : (
+            <>Enter your WhatsApp number in international format (e.g. +447700900123). We&apos;ll message you a 6-digit code.</>
+          )}
+        </p>
         <input
-          type="text"
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
-          placeholder={provider === "whatsapp" ? "+447700900123" : "123456789"}
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+447700900123"
           className="w-full px-3 py-2 rounded-md border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-accent"
         />
         {error && <p className="text-xs text-red-500">{error}</p>}
         <button
           type="submit"
-          disabled={pending || !identifier.trim()}
+          disabled={pending || !phone.trim()}
           className="w-full px-4 py-2.5 rounded-lg border border-border bg-foreground text-background font-medium hover:opacity-90 transition disabled:opacity-60"
         >
           {pending ? "Sending…" : "Send code"}
@@ -155,7 +196,7 @@ function OtpForm({
   return (
     <form onSubmit={verify} className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Enter the 6-digit code we just sent to <b>{identifier}</b>.
+        Enter the 6-digit code we just sent to <b>{phone}</b>.
       </p>
       <input
         type="text"
@@ -171,7 +212,7 @@ function OtpForm({
         <button
           type="button"
           onClick={() => {
-            setStep("identifier");
+            setStep("phone");
             setCode("");
           }}
           className="px-3 py-2 rounded-md border border-border text-sm hover:bg-foreground/5 transition"
