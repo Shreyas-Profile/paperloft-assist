@@ -88,7 +88,8 @@ export async function handleTelegramMessage(
         timeContext + "\n\n" +
         SYSTEM_PROMPT +
         (enabled.has("reminders") ? "\n\n" + reminderSkill.systemPrompt : "") +
-        "\n\nYou are speaking to the user on Telegram. Keep replies short and readable on a phone. Telegram supports basic markdown (**bold**, `code`) but not headings or tables.",
+        "\n\nYou are speaking to the user on Telegram. Keep replies short and readable on a phone. Telegram supports basic markdown (**bold**, `code`) but not headings or tables." +
+        "\n\nOn Telegram you have NO access to the user's local Chrome — only the `hosted_browser_*` tools work. When you need to interact with a live web page (search flights, check prices, click through anything JS-rendered), call `hosted_browser_navigate` first, then `hosted_browser_snapshot`, then act on the uids. Do NOT tell the user you 'tried a search' unless you actually called those tools.",
       messages,
       tools: filterTools(
         {
@@ -97,7 +98,10 @@ export async function handleTelegramMessage(
           ...reminderSkill.tools,
           linkedin_post: makeLinkedInSkill(email),
         },
-        allowed,
+        // Client-side browser_* tools need the chrome-agent bridge on the
+        // web /chat page. On Telegram they'd stream to nowhere and hang.
+        // Drop them here so the model can't pick them.
+        new Set([...allowed].filter((n) => !n.startsWith("browser_") || n.startsWith("browser_new"))),
       ),
       stopWhen: stepCountIs(5),
       providerOptions: {
