@@ -1,13 +1,17 @@
 "use client";
 
-// Two-tab sign-in — Google (OAuth) or WhatsApp (OTP).
-// Telegram was removed: bots can't DM users cold, so it required a one-time
-// bot-link dance that Shreyas judged not worth the friction.
+// Two-provider sign-in — Google (OAuth) or Telegram (Login Widget).
+// Telegram widget is a first-party script from telegram.org that renders a
+// button; on click, Telegram authenticates the user and redirects the
+// browser to `data-auth-url` with signed query params. Our server route at
+// /api/auth/telegram-login verifies the HMAC before completing sign-in.
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 
-type Tab = "google" | "whatsapp";
+type Tab = "google" | "telegram";
+
+const BOT_USERNAME = "PaperloftAssistantBot";
 
 export function SignInForms({ callbackUrl }: { callbackUrl: string }) {
   const [tab, setTab] = useState<Tab>("google");
@@ -15,10 +19,10 @@ export function SignInForms({ callbackUrl }: { callbackUrl: string }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-foreground/[0.05] border border-border">
         <TabBtn active={tab === "google"} onClick={() => setTab("google")}>Google</TabBtn>
-        <TabBtn active={tab === "whatsapp"} onClick={() => setTab("whatsapp")}>WhatsApp</TabBtn>
+        <TabBtn active={tab === "telegram"} onClick={() => setTab("telegram")}>Telegram</TabBtn>
       </div>
       {tab === "google" && <GoogleForm callbackUrl={callbackUrl} />}
-      {tab === "whatsapp" && <WhatsAppForm callbackUrl={callbackUrl} />}
+      {tab === "telegram" && <TelegramForm />}
     </div>
   );
 }
@@ -59,109 +63,33 @@ function GoogleForm({ callbackUrl }: { callbackUrl: string }) {
   );
 }
 
-function WhatsAppForm({ callbackUrl }: { callbackUrl: string }) {
-  const [step, setStep] = useState<"phone" | "code">("phone");
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+function TelegramForm() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const sendCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    startTransition(async () => {
-      const res = await fetch("/api/auth/otp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "whatsapp", phone: phone.trim() }),
-      });
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setError(j.error ?? "Failed to send code.");
-        return;
-      }
-      setStep("code");
-    });
-  };
-
-  const verify = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    startTransition(async () => {
-      const result = await signIn("whatsapp", {
-        identifier: phone.trim(),
-        code: code.trim(),
-        callbackUrl,
-        redirect: false,
-      });
-      if (result?.error) {
-        setError("Wrong or expired code. Try requesting a new one.");
-        return;
-      }
-      window.location.href = callbackUrl;
-    });
-  };
-
-  if (step === "phone") {
-    return (
-      <form onSubmit={sendCode} className="space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Enter your WhatsApp number in international format (e.g. +447700900123). We&apos;ll
-          message you a 6-digit code.
-        </p>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+447700900123"
-          className="w-full px-3 py-2 rounded-md border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-        />
-        {error && <p className="text-xs text-red-500">{error}</p>}
-        <button
-          type="submit"
-          disabled={pending || !phone.trim()}
-          className="w-full px-4 py-2.5 rounded-lg border border-border bg-foreground text-background font-medium hover:opacity-90 transition disabled:opacity-60"
-        >
-          {pending ? "Sending…" : "Send code"}
-        </button>
-      </form>
-    );
-  }
+  useEffect(() => {
+    if (!containerRef.current) return;
+    // Clear any prior widget iframe (e.g. React StrictMode re-mount).
+    containerRef.current.innerHTML = "";
+    const s = document.createElement("script");
+    s.async = true;
+    s.src = "https://telegram.org/js/telegram-widget.js?22";
+    s.setAttribute("data-telegram-login", BOT_USERNAME);
+    s.setAttribute("data-size", "large");
+    s.setAttribute("data-radius", "10");
+    s.setAttribute("data-auth-url", "/api/auth/telegram-login");
+    s.setAttribute("data-request-access", "write");
+    containerRef.current.appendChild(s);
+  }, []);
 
   return (
-    <form onSubmit={verify} className="space-y-3">
+    <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Enter the 6-digit code we just sent to <b>{phone}</b>.
+        Click the button to sign in with your Telegram account. Telegram will show a confirmation popup — approve it and you&apos;re in.
       </p>
-      <input
-        type="text"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder="123456"
-        inputMode="numeric"
-        maxLength={6}
-        className="w-full px-3 py-2 rounded-md border border-border bg-transparent text-sm font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-accent"
-      />
-      {error && <p className="text-xs text-red-500">{error}</p>}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setStep("phone");
-            setCode("");
-          }}
-          className="px-3 py-2 rounded-md border border-border text-sm hover:bg-foreground/5 transition"
-        >
-          Back
-        </button>
-        <button
-          type="submit"
-          disabled={pending || code.length < 4}
-          className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-foreground text-background font-medium hover:opacity-90 transition disabled:opacity-60"
-        >
-          {pending ? "Verifying…" : "Sign in"}
-        </button>
-      </div>
-    </form>
+      <div ref={containerRef} className="flex justify-center min-h-[46px]" />
+      <p className="text-[11px] text-muted-foreground">
+        We only receive your Telegram id, name, and (if set) username & photo. No phone number, no message history.
+      </p>
+    </div>
   );
 }

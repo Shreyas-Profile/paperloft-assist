@@ -23,7 +23,7 @@ export default async function SignInPage({
           </div>
           <h1 className="text-2xl font-semibold">Sign in to Paperloft Assist</h1>
           <p className="text-muted-foreground text-sm">
-            Continue with Google, or use your WhatsApp number.
+            Continue with Google, or sign in with Telegram.
           </p>
         </div>
         {error ? (
