@@ -10,9 +10,7 @@ import { enableSkill, disableSkill } from "@/lib/enabled-skills";
 // Kept in sync with SKILLS[].id in src/app/skills/page.tsx. Adding a new skill?
 // Add its id here too so the API refuses toggle requests for unknown skills.
 const KNOWN_SKILLS = new Set([
-  "telegram_mcp",
   "video_render_mcp",
-  "browser_agent",
   "reminders",
 ]);
 

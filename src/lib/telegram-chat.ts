@@ -89,8 +89,8 @@ export async function handleTelegramMessage(
         SYSTEM_PROMPT +
         (enabled.has("reminders") ? "\n\n" + reminderSkill.systemPrompt : "") +
         "\n\nYou are speaking to the user on Telegram. Keep replies short and readable on a phone. Telegram supports basic markdown (**bold**, `code`) but not headings or tables." +
-        "\n\nOn Telegram you have NO access to the user's local Chrome — only the `hosted_browser_*` tools work. When you need to interact with a live web page (search flights, check prices, click through anything JS-rendered), call `hosted_browser_navigate` first, then `hosted_browser_snapshot`, then act on the uids. Do NOT tell the user you 'tried a search' unless you actually called those tools." +
-        "\n\nSite hints for flights: our hosted browser runs from a Hetzner IP in Germany, so google.com puts a cookie consent wall in front of Google Flights. Prefer `https://www.skyscanner.net/`, `https://www.kayak.co.uk/flights`, or `https://www.momondo.co.uk/` — same data, no consent wall. Momondo often shows headline 'from £X' prices even in the initial HTML, so `fetch_url` on it can work as a fast fallback if the browser gets stuck.",
+        "\n\nWhen you need to interact with a live web page (search flights, check prices, click through anything JS-rendered), call `browser_navigate` first, then `browser_snapshot`, then act on the uids. Do NOT tell the user you 'tried a search' unless you actually called those tools." +
+        "\n\nSite hints for flights: our browser runs from a Hetzner IP in Germany, so google.com puts a cookie consent wall in front of Google Flights. Prefer `https://www.skyscanner.net/`, `https://www.kayak.co.uk/flights`, or `https://www.momondo.co.uk/` — same data, no consent wall. Momondo often shows headline 'from £X' prices even in the initial HTML, so `fetch_url` on it can work as a fast fallback if the browser gets stuck.",
       messages,
       tools: filterTools(
         {
@@ -99,10 +99,7 @@ export async function handleTelegramMessage(
           ...reminderSkill.tools,
           linkedin_post: makeLinkedInSkill(email),
         },
-        // Client-side browser_* tools need the chrome-agent bridge on the
-        // web /chat page. On Telegram they'd stream to nowhere and hang.
-        // Drop them here so the model can't pick them.
-        new Set([...allowed].filter((n) => !n.startsWith("browser_") || n.startsWith("browser_new"))),
+        allowed,
       ),
       // 5 was the old cap and it wasn't enough — a browser workflow (new tab,
       // snapshot, click, snapshot, type, snapshot, click, read) burns ~8

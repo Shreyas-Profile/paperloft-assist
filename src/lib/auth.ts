@@ -25,7 +25,9 @@ import { prisma } from "./db";
 
 // Skills every user gets by default, on every sign-in. `enableSkill` is
 // idempotent, so re-inserting is a cheap no-op after the first time.
-const DEFAULT_SKILLS = ["browser_agent", "reminders"];
+// (browser_* and cron_* live in ALWAYS_ON_TOOLS in skill-tool-map.ts — no
+// toggle, always available.)
+const DEFAULT_SKILLS = ["reminders"];
 
 function telegramEmail(id: string): string {
   return `tg-${id}@telegram.paperloft.local`;

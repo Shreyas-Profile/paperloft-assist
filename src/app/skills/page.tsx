@@ -28,6 +28,9 @@ type SkillEntry = {
 // telegram_mcp (Telegram bridge — BYO-bot MCP marketplace item) removed.
 // Redundant now that /skills shows a first-class Telegram delivery card
 // backed by @PaperloftAssistantBot at the top of this page.
+// browser_agent (client-side Chrome via extension) removed. Replaced by
+// always-on hosted browser_* tools backed by globalion/browser-mcp on
+// Hetzner — same names, always available, no local machine needed.
 const SKILLS: SkillEntry[] = [
   {
     id: "video_render_mcp",
@@ -38,16 +41,6 @@ const SKILLS: SkillEntry[] = [
     price: "Free (20/day)",
     needs: "Google sign-in",
     publisher: "Globalion (Pawan)",
-  },
-  {
-    id: "browser_agent",
-    name: "Browser Agent",
-    category: "External · Client-side · Globalion",
-    description:
-      "Drives your real Chrome — navigate, click, type, screenshot, plus an encrypted credential vault for site logins. Runs locally on your machine.",
-    price: "Free",
-    needs: "Chrome",
-    publisher: "Globalion (Shreyas)",
   },
   {
     id: "reminders",

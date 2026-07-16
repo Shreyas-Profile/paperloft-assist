@@ -1,13 +1,8 @@
-// Server-side browser skill backed by globalion/browser-mcp on Hetzner.
+// Browser skill backed by globalion/browser-mcp on Hetzner.
 //
-// The old browser_* set (skills/browser-primitives.ts) is CLIENT-side — the
-// tool call streams to the user's Chrome via the chrome-agent extension. That
-// works from the /chat page in a browser but is unreachable from the Telegram
-// bot (there's no client-side bridge on that surface).
-//
-// These hosted_browser_* tools call browser-mcp (a hosted Playwright Chrome
-// running as a container on the same Hetzner box) over JSON-RPC. They have
-// `execute()` fns, so they work from any surface — /chat, Telegram, cron, MCP.
+// One and only browser skill — always runs on our server (real Google Chrome
+// via Playwright, per-user persistent state). Works from every surface: web
+// /chat, Telegram, cron. No client-side variant, no chrome-agent extension.
 //
 // Session model: browser-mcp gives us a per-user Playwright page keyed by
 // sessionId. To spare the LLM from juggling ids, we cache one sessionId per
@@ -76,10 +71,6 @@ async function getSession(userEmail: string): Promise<string> {
   return fresh;
 }
 
-/**
- * Run one action, transparently retrying once with a new session if the
- * existing one has expired on browser-mcp's side.
- */
 async function withSession<T>(
   userEmail: string,
   fn: (sessionId: string) => Promise<T>,
@@ -97,37 +88,33 @@ async function withSession<T>(
   }
 }
 
-/**
- * Build per-user hosted-browser tools. Session management is fully implicit
- * from the LLM's view — the tools just take semantic args (url, uid, text).
- */
-export function makeHostedBrowserSkills(userEmail: string) {
+export function makeBrowserSkills(userEmail: string) {
   return {
-    hosted_browser_navigate: tool({
+    browser_navigate: tool({
       description:
-        "Open a URL in a hosted Chrome browser that runs on our server. Use this on Telegram or when the user's local browser isn't available — it works everywhere. Sessions persist across your tool calls in the same conversation, so navigating once then snapshotting/clicking works as expected. Waits for the page to load (30s timeout). Returns basic status; call hosted_browser_snapshot next to see the page.",
+        "Open a URL in a real Chrome browser running on our server. Works everywhere (web /chat, Telegram, cron). Sessions persist across tool calls in the same turn — navigate once, then snapshot/click/type as needed. Waits for page load (30s timeout). Returns basic status; call browser_snapshot next to see the page.",
       inputSchema: z.object({
         url: z.string().describe("Full URL including https://."),
       }),
       execute: async ({ url }) => withSession(userEmail, (s) => callTool("browser_navigate", { sessionId: s, url })),
     }),
-    hosted_browser_snapshot: tool({
+    browser_snapshot: tool({
       description:
-        "Return an accessibility-tree snapshot of the current hosted page — every clickable/typeable element gets a stable `uid`. ALWAYS call this after navigate/click before deciding what to click or type next. Uids are more reliable than CSS selectors on modern JS-heavy sites.",
+        "Return an accessibility-tree snapshot of the current page — every clickable/typeable element gets a stable `uid`. ALWAYS call this after navigate/click before deciding what to click or type next. Uids are more reliable than CSS selectors on modern JS-heavy sites.",
       inputSchema: z.object({}),
       execute: async () => withSession(userEmail, (s) => callTool("browser_snapshot", { sessionId: s })),
     }),
-    hosted_browser_click: tool({
+    browser_click: tool({
       description:
-        "Click an element in the hosted browser by its uid (from hosted_browser_snapshot).",
+        "Click an element in the browser by its uid (from browser_snapshot).",
       inputSchema: z.object({
-        uid: z.string().describe("uid from a prior hosted_browser_snapshot."),
+        uid: z.string().describe("uid from a prior browser_snapshot."),
       }),
       execute: async ({ uid }) => withSession(userEmail, (s) => callTool("browser_click", { sessionId: s, uid })),
     }),
-    hosted_browser_type: tool({
+    browser_type: tool({
       description:
-        "Focus a hosted-browser input by uid and type text into it. Doesn't submit — call hosted_browser_press_key with 'Enter' or hosted_browser_click on the submit button after.",
+        "Focus an input by uid and type text. Doesn't submit — call browser_press_key with 'Enter' or browser_click on the submit button after.",
       inputSchema: z.object({
         uid: z.string(),
         text: z.string(),
@@ -135,17 +122,17 @@ export function makeHostedBrowserSkills(userEmail: string) {
       execute: async ({ uid, text }) =>
         withSession(userEmail, (s) => callTool("browser_type", { sessionId: s, uid, text })),
     }),
-    hosted_browser_press_key: tool({
+    browser_press_key: tool({
       description:
-        "Press a keyboard key in the hosted browser (e.g. 'Enter', 'Escape', 'ArrowDown'). Use after typing to submit forms.",
+        "Press a keyboard key (e.g. 'Enter', 'Escape', 'ArrowDown'). Use after typing to submit forms.",
       inputSchema: z.object({
         key: z.string(),
       }),
       execute: async ({ key }) => withSession(userEmail, (s) => callTool("browser_press_key", { sessionId: s, key })),
     }),
-    hosted_browser_wait_for: tool({
+    browser_wait_for: tool({
       description:
-        "Wait for a CSS selector to appear on the hosted page (up to timeoutMs, default 5000). Use after navigation/click when the page loads content asynchronously and hosted_browser_snapshot returns before results appear.",
+        "Wait for a CSS selector to appear on the page (up to timeoutMs, default 5000). Use after navigation/click when the page loads content asynchronously and browser_snapshot returns before results appear.",
       inputSchema: z.object({
         selector: z.string(),
         timeoutMs: z.number().optional(),
@@ -155,9 +142,9 @@ export function makeHostedBrowserSkills(userEmail: string) {
           callTool("browser_wait_for", { sessionId: s, selector, timeoutMs: timeoutMs ?? 5000 }),
         ),
     }),
-    hosted_browser_read_page: tool({
+    browser_read_page: tool({
       description:
-        "Return the visible text content of the hosted page (up to 20 000 chars). Use to extract results after a search/filter completes.",
+        "Return the visible text content of the current page (up to 20 000 chars). Use to extract results after a search/filter completes.",
       inputSchema: z.object({}),
       execute: async () => withSession(userEmail, (s) => callTool("browser_read_page", { sessionId: s })),
     }),
