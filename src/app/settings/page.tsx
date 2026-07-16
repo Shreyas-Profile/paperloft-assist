@@ -5,17 +5,12 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { isAdmin } from "@/lib/admin";
-import { prisma } from "@/lib/db";
-import { TelegramConnect } from "./telegram-connect";
 
 export default async function SettingsPage() {
   const session = await auth();
   const user = session?.user;
   if (!user?.email) redirect("/signin");
   const admin = isAdmin(user.email);
-  const telegramLink = await prisma.telegramLink
-    .findUnique({ where: { userEmail: user.email } })
-    .catch(() => null);
 
   return (
     <AppShell>
