@@ -9,6 +9,7 @@
 //     Example: the browser_* tools below.
 
 import { findOpportunitiesTool } from "./find-opportunities";
+import { makeHostedBrowserSkills } from "../hosted-browser";
 import {
   browserNewTab,
   browserNavigate,
@@ -32,9 +33,10 @@ export const skills = {
   browser_read_page: browserReadPage,
 } as const;
 
-// Per-user skills that need the authed userEmail. Currently empty —
-// set_reminder was superseded by the nova-reminders skill (14 richer tools
-// composed in chat/route.ts via createReminderSkill).
-export function makeUserScopedSkills(_userEmail: string) {
-  return {} as const;
+// Per-user skills that need the authed userEmail. Hosted-browser tools go
+// here because they cache a browser-mcp sessionId per user.
+export function makeUserScopedSkills(userEmail: string) {
+  return {
+    ...makeHostedBrowserSkills(userEmail),
+  } as const;
 }

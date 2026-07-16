@@ -45,11 +45,22 @@ export const SKILL_TOOLS: Record<string, string[]> = {
   ],
 };
 
-// Tools that are always on (not gated by any skill). fetch_url is a
-// general-purpose web fetcher — kept always-on because it's cheap and useful
-// for almost every query. (Historically this list held find_opportunities,
-// which was the narrow apprenticeships-only version of the same tool.)
-export const ALWAYS_ON_TOOLS = ["fetch_url"];
+// Tools that are always on (not gated by any skill).
+// - fetch_url: general Jina Reader fetch, cheap.
+// - hosted_browser_*: hosted Playwright Chrome on Hetzner (browser-mcp).
+//   Works everywhere (web /chat, Telegram, cron) since it runs server-side —
+//   unlike the client-side browser_* tools which need the user's local Chrome
+//   via the chrome-agent extension.
+export const ALWAYS_ON_TOOLS = [
+  "fetch_url",
+  "hosted_browser_navigate",
+  "hosted_browser_snapshot",
+  "hosted_browser_click",
+  "hosted_browser_type",
+  "hosted_browser_press_key",
+  "hosted_browser_wait_for",
+  "hosted_browser_read_page",
+];
 
 // Given the set of skill ids enabled for a user, return the flat set of
 // chat tool names they should see.
