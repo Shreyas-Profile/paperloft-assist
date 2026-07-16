@@ -89,7 +89,8 @@ export async function handleTelegramMessage(
         SYSTEM_PROMPT +
         (enabled.has("reminders") ? "\n\n" + reminderSkill.systemPrompt : "") +
         "\n\nYou are speaking to the user on Telegram. Keep replies short and readable on a phone. Telegram supports basic markdown (**bold**, `code`) but not headings or tables." +
-        "\n\nOn Telegram you have NO access to the user's local Chrome — only the `hosted_browser_*` tools work. When you need to interact with a live web page (search flights, check prices, click through anything JS-rendered), call `hosted_browser_navigate` first, then `hosted_browser_snapshot`, then act on the uids. Do NOT tell the user you 'tried a search' unless you actually called those tools.",
+        "\n\nOn Telegram you have NO access to the user's local Chrome — only the `hosted_browser_*` tools work. When you need to interact with a live web page (search flights, check prices, click through anything JS-rendered), call `hosted_browser_navigate` first, then `hosted_browser_snapshot`, then act on the uids. Do NOT tell the user you 'tried a search' unless you actually called those tools." +
+        "\n\nSite hints for flights: our hosted browser runs from a Hetzner IP in Germany, so google.com puts a cookie consent wall in front of Google Flights. Prefer `https://www.skyscanner.net/`, `https://www.kayak.co.uk/flights`, or `https://www.momondo.co.uk/` — same data, no consent wall. Momondo often shows headline 'from £X' prices even in the initial HTML, so `fetch_url` on it can work as a fast fallback if the browser gets stuck.",
       messages,
       tools: filterTools(
         {
@@ -103,12 +104,30 @@ export async function handleTelegramMessage(
         // Drop them here so the model can't pick them.
         new Set([...allowed].filter((n) => !n.startsWith("browser_") || n.startsWith("browser_new"))),
       ),
-      stopWhen: stepCountIs(5),
+      // 5 was the old cap and it wasn't enough — a browser workflow (new tab,
+      // snapshot, click, snapshot, type, snapshot, click, read) burns ~8
+      // steps easily, then the model returned empty text and users saw
+      // "(no reply)". 25 gives real headroom without letting a runaway loop
+      // hammer the LLM budget.
+      stopWhen: stepCountIs(25),
       providerOptions: {
         openai: { parallelToolCalls: false },
       },
     });
-    reply = result.text.trim() || "(no reply)";
+    reply = result.text.trim();
+    // If the model returned no text but DID call tools, don't drop them on
+    // the floor with "(no reply)" — surface what actually happened.
+    if (!reply) {
+      const toolCalls = result.steps
+        ?.flatMap((s) => s.toolCalls ?? [])
+        .map((c) => c.toolName)
+        .filter(Boolean) ?? [];
+      const summary = toolCalls.length
+        ? `I called ${toolCalls.length} tools (${[...new Set(toolCalls)].join(", ")}) but didn't have anything final to say — the flow probably got stuck partway. Try being more specific about the site or step you want me to try.`
+        : "I couldn't come up with anything useful. Try rephrasing?";
+      console.warn(`[telegram-chat] empty reply after ${toolCalls.length} tool calls`);
+      reply = summary;
+    }
   } catch (err) {
     console.error("[telegram-chat] generateText threw:", err);
     return "Something broke on my end. Try again in a moment.";

@@ -129,9 +129,13 @@ export async function POST(req: Request) {
       },
       allowed,
     ),
-    // Cap per-server-round steps. The full loop is bounded by the client's
-    // sendAutomaticallyWhen guard (15 assistant turns total).
-    stopWhen: stepCountIs(5),
+    // Cap per-server-round steps. Bumped from 5 → 25 because hosted browser
+    // workflows (navigate → snapshot → click through consent → snapshot →
+    // type search → snapshot → click → read) legitimately need >5 steps;
+    // the old cap made the model return empty text mid-flow. Full loop is
+    // still bounded by the client's sendAutomaticallyWhen guard (15
+    // assistant turns total).
+    stopWhen: stepCountIs(25),
     // Disable parallel tool calls — the browser tools are stateful (opening
     // a tab affects the next snapshot). Without this, the LLM cheerfully
     // issues 5 identical browser_new_tab calls in one step, spawning 5 tabs.
