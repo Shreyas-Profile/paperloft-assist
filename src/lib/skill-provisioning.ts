@@ -31,6 +31,12 @@ const SKILL_ENDPOINTS: Record<string, SkillEndpoint> = {
     grantUrl: "https://docs.regiq.in/api/platform/grant-credits",
     sharedSecretEnv: "DOCS_MCP_PLATFORM_SECRET",
   },
+  tor_mcp: {
+    skillId: "tor_mcp",
+    provisionUrl: "https://tor.regiq.in/api/platform/provision-user",
+    grantUrl: "https://tor.regiq.in/api/platform/grant-credits",
+    sharedSecretEnv: "TOR_MCP_PLATFORM_SECRET",
+  },
 };
 
 export interface ProvisionResult {

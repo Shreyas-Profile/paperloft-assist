@@ -62,6 +62,16 @@ const SKILLS: SkillEntry[] = [
     needs: "WhatsApp sign-in (or your phone number)",
     publisher: "Globalion (Shreyas, forked from Pakki10/nova-reminders)",
   },
+  {
+    id: "tor_mcp",
+    name: "Tor (anonymous fetch)",
+    category: "External MCP · Globalion",
+    description:
+      "Route HTTP requests through the Tor network — rotating anonymous exit IPs, .onion support. Honest scope: doesn't beat Cloudflare (Indeed / Google / LinkedIn will still block), the assistant will fall back to the browser skill for those. Best for: non-CF sites, geo-hidden fetches, .onion services, IP-based rate-limit circumvention. On enable, we provision you a private tenant on tor.regiq.in — request logs are scoped to you (metadata only, never bodies).",
+    price: "Free · 100 requests/day per key",
+    needs: "Google sign-in",
+    publisher: "Globalion (Shreyas)",
+  },
 ];
 
 export default async function SkillsPage() {

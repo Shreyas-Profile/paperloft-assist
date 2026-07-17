@@ -8,6 +8,7 @@ import { findOpportunitiesTool } from "./find-opportunities";
 import { makeBrowserSkills } from "../hosted-browser";
 import { makeCronSkills } from "../hosted-cron";
 import { makeDocsSkills } from "../hosted-docs";
+import { makeTorSkills } from "../hosted-tor";
 
 // Provider-agnostic base skills (no per-user context needed).
 export const skills = {
@@ -27,5 +28,6 @@ export function makeUserScopedSkills(userEmail: string) {
     ...makeBrowserSkills(userEmail),
     ...makeCronSkills(userEmail),
     ...makeDocsSkills(userEmail),
+    ...makeTorSkills(userEmail),
   } as const;
 }
