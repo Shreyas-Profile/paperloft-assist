@@ -70,10 +70,18 @@ export function ChatView({
     scrollAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
-  function send() {
-    const text = input.trim();
-    if (!text) return;
-    void sendMessage({ text });
+  function send(extra?: { attachedDoc?: { docId: string; filename: string; status: string } }) {
+    const attached = extra?.attachedDoc;
+    const userText = input.trim();
+    if (!userText && !attached) return;
+    // Prepend a compact attachment marker so the LLM knows the doc exists +
+    // its status. It should poll docs_get({id}) until ready, then use
+    // docs_search on it. If the user typed nothing, we still send with just
+    // the marker — a common "here, remember this" pattern.
+    const finalText = attached
+      ? `[Attached: ${attached.filename} · docId=${attached.docId} · status=${attached.status}. Ingest usually completes in 10-60s — poll docs_get if you need to search it now.]${userText ? "\n\n" + userText : ""}`
+      : userText;
+    void sendMessage({ text: finalText });
     setInput("");
   }
 
