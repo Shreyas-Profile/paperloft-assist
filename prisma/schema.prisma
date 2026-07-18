@@ -87,6 +87,33 @@ model SkillConnection {
   @@index([userEmail])
 }
 
+// User-added ("bring your own") MCP skills. Each row is one remote MCP
+// endpoint the user has plugged in — a URL + auth headers + a cached copy
+// of the tool descriptors we discovered on save. Headers are stored
+// AES-256-GCM encrypted with USER_SKILL_ENCRYPTION_KEY; they contain the
+// user's third-party API keys and must never appear plaintext at rest.
+//
+// Design notes:
+//   - Tools are re-discovered on save (and manual "refresh"), NOT on every
+//     chat turn, so the LLM sees a stable toolbelt even if the remote MCP
+//     is momentarily down. `tools` caches [{ name, description, inputSchema }].
+//   - `enabled` gates whether the tools flow into the LLM's toolbelt.
+//   - Hard cap of 20 rows per userEmail — enforced at the API layer.
+model UserSkill {
+  id               String   @id @default(cuid())
+  userEmail        String
+  name             String   // user-chosen slug like "my-jira" — used in the tool prefix
+  mcpUrl           String   // e.g. https://mcp.example.com/api/mcp
+  headersEncrypted String?  @db.Text  // ciphertext of JSON.stringify(headersObject)
+  tools            Json     @default("[]") // cached [{ name, description, inputSchema }]
+  enabled          Boolean  @default(true)
+  addedAt          DateTime @default(now())
+  lastVerifiedAt   DateTime?
+
+  @@unique([userEmail, name])
+  @@index([userEmail])
+}
+
 // ---- Reminders skill (vendored from Pakki10/nova-reminders MIT) ----------
 // Replaces the earlier flat `Reminder` model. `userId` here stores the
 // user's email — paperloft-assist identifies users by JWT email and

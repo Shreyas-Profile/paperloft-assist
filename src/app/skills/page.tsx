@@ -14,6 +14,8 @@ import { listEnabledSkills } from "@/lib/enabled-skills";
 import { SkillCard } from "./skill-card";
 import { prisma } from "@/lib/db";
 import { TelegramConnect } from "../settings/telegram-connect";
+import { ByoSkillsPanel } from "./byo-skills-panel";
+import { MAX_SKILLS_PER_USER } from "@/lib/user-skills";
 
 type SkillEntry = {
   id: string;
@@ -82,6 +84,26 @@ export default async function SkillsPage() {
   const telegramLink = await prisma.telegramLink
     .findUnique({ where: { userEmail: session.user.email } })
     .catch(() => null);
+  const byoRows = await prisma.userSkill.findMany({
+    where: { userEmail: session.user.email },
+    orderBy: { addedAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      mcpUrl: true,
+      enabled: true,
+      addedAt: true,
+      tools: true,
+    },
+  });
+  const byoSkills = byoRows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    mcpUrl: r.mcpUrl,
+    enabled: r.enabled,
+    addedAt: r.addedAt.toISOString(),
+    toolCount: Array.isArray(r.tools) ? r.tools.length : 0,
+  }));
 
   return (
     <AppShell>
@@ -101,6 +123,8 @@ export default async function SkillsPage() {
               {admin ? " — and you're an admin, so it stays free" : ""}.
             </p>
           </div>
+
+          <ByoSkillsPanel initial={byoSkills} max={MAX_SKILLS_PER_USER} />
 
           {/* Telegram — first-class connect card, not a toggle. Was on Settings; moved
               here because it's a capability, not an account preference. */}

@@ -23,6 +23,7 @@ import { listEnabledSkills } from "@/lib/enabled-skills";
 import { toolsForEnabledSkills } from "@/lib/skill-tool-map";
 import { createReminderSkill } from "@/lib/skills/nova-reminders";
 import { makeReminderCtx } from "@/lib/reminders-adapter";
+import { makeUserByoSkills, listByoToolNames } from "@/lib/user-skills";
 
 export const runtime = "nodejs"; // Prisma + better-sqlite3 need Node runtime, not Edge.
 export const maxDuration = 60;
@@ -97,6 +98,18 @@ export async function POST(req: Request) {
   const enabled = await listEnabledSkills(email);
   const allowed = toolsForEnabledSkills(enabled);
 
+  // BYO ("bring your own") skills — user-added MCP endpoints. Each enabled
+  // one contributes its own set of tools with `byo_<slug>__<toolName>`
+  // names so they can never collide with marketplace tools. We fetch the
+  // tool bag AND the allowed-name set in parallel and merge both into the
+  // filter — the filter is name-based, so BYO tools must be added to it
+  // explicitly (they're not part of skill-tool-map).
+  const [byoTools, byoNames] = await Promise.all([
+    makeUserByoSkills(email),
+    listByoToolNames(email),
+  ]);
+  for (const n of byoNames) allowed.add(n);
+
   // Today's date/time. Without this, models like DeepSeek reply "what's today's
   // date?" whenever the user says "tomorrow", "tonight", "next Monday" etc.
   const now = new Date();
@@ -125,6 +138,7 @@ export async function POST(req: Request) {
         ...skills,
         ...makeUserScopedSkills(email),
         ...reminderSkill.tools,
+        ...byoTools,
         linkedin_post: makeLinkedInSkill(email),
       },
       allowed,

@@ -24,6 +24,16 @@ export const SKILL_TOOLS: Record<string, string[]> = {
     "docs_delete",
     "docs_balance",
   ],
+  // Tor (tor-mcp) — anonymous HTTP fetch through the Tor network. Toggling
+  // this on provisions a sub-account on tor.regiq.in. Honest scope: won't
+  // beat Cloudflare-guarded sites (Indeed, Google, LinkedIn) — the LLM
+  // falls back to browser_* for those.
+  tor_mcp: [
+    "tor_fetch",
+    "tor_get_exit_ip",
+    "tor_new_circuit",
+    "tor_check",
+  ],
   // Nova-reminders skill — general/medication/appointment reminders plus
   // prescription intake (image/PDF/text).
   reminders: [
