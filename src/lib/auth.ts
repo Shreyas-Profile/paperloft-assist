@@ -114,6 +114,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       for (const skillId of DEFAULT_SKILLS) {
         enableSkill(user.email, skillId).catch(() => undefined);
       }
+      // WhatsApp sign-in identities (email = "+<phone>@phone.paperloft.local")
+      // need a UserChannelPref row so inbound WhatsApp messages from that
+      // number can be routed back to this account. Upsert-only, never
+      // overwrites an existing pref (user may have set a different phone
+      // via channel_prefs_update in-chat).
+      const m = /^(\+\d+)@phone\.paperloft\.local$/.exec(user.email);
+      if (m) {
+        const phone = m[1];
+        await prisma.userChannelPref
+          .upsert({
+            where: { userId: user.email },
+            create: {
+              userId: user.email,
+              whatsappNumber: phone,
+              defaultChannel: "whatsapp",
+            },
+            update: {},
+          })
+          .catch((e) => console.error("[auth] channel-pref upsert failed:", e));
+      }
     },
   },
   pages: {

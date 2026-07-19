@@ -1,5 +1,7 @@
 // Dedicated sign-in page. Auth.js redirects here when someone hits a
-// protected route without a session. Renders the tabbed UI (Google + WhatsApp).
+// protected route without a session. WhatsApp-only sign-in for users.
+// (Google + Telegram providers still exist in auth.ts as a backdoor so
+// existing sessions keep working — the tabs were just removed from the UI.)
 
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -23,7 +25,7 @@ export default async function SignInPage({
           </div>
           <h1 className="text-2xl font-semibold">Sign in to Paperloft Assist</h1>
           <p className="text-muted-foreground text-sm">
-            Continue with Google, or sign in with Telegram.
+            Sign in with your WhatsApp number.
           </p>
         </div>
         {error ? (

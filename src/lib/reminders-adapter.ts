@@ -19,6 +19,7 @@ import { prisma } from "./db";
 import { openrouter, CHAT_MODEL } from "./openrouter";
 import { sendWhatsApp } from "./wasender";
 import { getIntegration } from "./integrations";
+import { appendMessage } from "./chat";
 import type { SkillContext } from "./skills/nova-reminders/context";
 import type { MessageEnvelope } from "./skills/nova-reminders/types";
 import { EXTRACTOR_SYSTEM_PROMPT } from "./skills/nova-reminders/prescription/extract";
@@ -96,8 +97,23 @@ async function deliverEnvelope(env: MessageEnvelope): Promise<void> {
       env.buttons.length > 0
         ? "\n\n" + env.buttons.map((b) => `- ${b.label} (reply "${b.id}")`).join("\n")
         : "";
-    const send = await sendWhatsApp(number, env.text + buttonLine);
+    const fullText = env.text + buttonLine;
+    const send = await sendWhatsApp(number, fullText);
     if (!send.ok) throw new Error(`sendWhatsApp: ${send.reason || "unknown"}`);
+    // Append to the WhatsApp conversation history so that when the user
+    // later replies with an ack, the LLM turn sees the fired reminder
+    // in context and can call reminder_ack on the right instance. The
+    // convId scheme matches whatsapp-chat.ts. Only append if the conv
+    // already exists — no point creating one for users who never chat.
+    const convId = `wa_${number.replace(/[^0-9+]/g, "")}`;
+    const conv = await prisma.conversation
+      .findUnique({ where: { id: convId }, select: { id: true } })
+      .catch(() => null);
+    if (conv) {
+      await appendMessage(convId, "assistant", fullText).catch((e) =>
+        console.warn(`[reminders-adapter] failed to log fire to ${convId}:`, e),
+      );
+    }
     return;
   }
 
