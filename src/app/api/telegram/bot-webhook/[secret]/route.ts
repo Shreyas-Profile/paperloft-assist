@@ -87,6 +87,14 @@ async function handleLinkNonce(chatId: string, nonce: string, msg: TgMessage) {
     ).catch(() => undefined);
     return;
   }
+  // Delete any other rows still holding this chatId under a different
+  // email — a Telegram chat should map to exactly one Paperloft account.
+  // Without this, a user who re-links from a different account leaves the
+  // old row behind and the chat handler (which reads by chatId) can pick
+  // the wrong email — that's the bug Pawan hit that made BYO tools invisible.
+  await prisma.telegramLink.deleteMany({
+    where: { chatId, userEmail: { not: row.userEmail } },
+  });
   await prisma.telegramLink.upsert({
     where: { userEmail: row.userEmail },
     create: {

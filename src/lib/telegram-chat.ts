@@ -42,7 +42,16 @@ export async function handleTelegramMessage(
   chatId: string,
   userText: string,
 ): Promise<string> {
-  const link = await prisma.telegramLink.findFirst({ where: { chatId } });
+  // Prefer the most recently linked row. Historical rows can pile up here
+  // when the same chatId gets re-linked to a different Paperloft account —
+  // upsert-on-userEmail leaves the older row behind, and picking arbitrary
+  // findFirst order gave Pawan a stale placeholder email with no skills.
+  // Belt + braces: bot-webhook now deletes other rows with the same chatId
+  // on claim, but keeping the orderBy defends against dupes we didn't catch.
+  const link = await prisma.telegramLink.findFirst({
+    where: { chatId },
+    orderBy: { linkedAt: "desc" },
+  });
   if (!link) return CONNECT_HINT;
   const email = link.userEmail;
 
