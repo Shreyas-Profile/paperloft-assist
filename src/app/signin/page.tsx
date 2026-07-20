@@ -63,24 +63,44 @@ export default async function SignInPage({
 
         <div className="border-t border-border/50 pt-5 space-y-3">
           <p className="text-sm font-semibold">
-            Never used Telegram before? It&apos;s free — takes 2 minutes.
+            Never used Telegram before? It&apos;s free — takes about 2 minutes.
           </p>
-          <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside pl-1">
+          <ol className="text-sm text-muted-foreground space-y-3 list-decimal list-outside pl-5">
             <li>
-              Download the app — same idea as WhatsApp, just a different
-              company.
+              <span className="font-medium text-foreground">Download the app.</span>{" "}
+              Use one of the buttons below (iPhone / Android). Telegram is a
+              free chat app like WhatsApp — different company, similar idea.
             </li>
             <li>
-              Open it and tap <span className="font-medium text-foreground">Start Messaging</span>.
-              Enter your phone number and confirm with the code Telegram
-              texts you (that&apos;s an SMS from Telegram, not from us).
+              <span className="font-medium text-foreground">Open the app</span>{" "}
+              and tap <span className="italic">Start Messaging</span>.
             </li>
             <li>
-              Come back to this page and tap the blue{" "}
+              <span className="font-medium text-foreground">Pick your country and enter your phone number.</span>{" "}
+              You can use the same number as your WhatsApp — Telegram just uses
+              it to verify it&apos;s really you. Tap the arrow / Next.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">Type the 5-digit code</span>{" "}
+              Telegram sends you by SMS. (This SMS is from Telegram, not from
+              us. Should arrive in a few seconds.)
+            </li>
+            <li>
+              <span className="font-medium text-foreground">Enter your first name.</span>{" "}
+              Last name is optional. Tap the arrow / Next. If it asks to sync
+              your contacts, you can allow or skip — doesn&apos;t matter for
+              signing in here.
+            </li>
+            <li>
+              You&apos;re in Telegram!{" "}
+              <span className="font-medium text-foreground">
+                Come back to this tab
+              </span>{" "}
+              and tap the blue{" "}
               <span className="font-medium text-foreground">
                 Log in with Telegram
               </span>{" "}
-              button above.
+              button above. Confirm the popup and you&apos;re signed in.
             </li>
           </ol>
 
