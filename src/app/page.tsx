@@ -51,12 +51,20 @@ function Nav() {
           <LogoMark />
           <span>Paperloft Assist</span>
         </Link>
-        <Link
-          href="/signin?callbackUrl=/chat"
-          className="rounded-lg bg-foreground text-background text-sm font-medium px-4 py-2 hover:opacity-90 transition"
-        >
-          Get started
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/signin?callbackUrl=/chat"
+            className="rounded-lg border border-border text-sm font-medium px-3.5 py-2 hover:bg-foreground/5 transition"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/signin?callbackUrl=/chat"
+            className="rounded-lg bg-foreground text-background text-sm font-medium px-4 py-2 hover:opacity-90 transition"
+          >
+            Sign up
+          </Link>
+        </div>
       </div>
     </nav>
   );
