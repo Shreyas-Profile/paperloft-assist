@@ -14,9 +14,24 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 
+// Default country code shown pre-filled in the phone input. Most users are
+// in India; forcing every user to type "+91" was a real drop-off point (and
+// caused silent "nothing happens on button click" bugs when older iPhones
+// autocorrected the + away). Users outside India just backspace and retype.
+const DEFAULT_DIAL_CODE = "+91";
+
+// Keep the input as +<digits> only. Strips spaces, dashes, letters, and any
+// stray "+" that isn't at position 0 (some keyboards paste "+91+91...").
+function sanitizePhone(raw: string): string {
+  let v = raw.replace(/[^\d+]/g, "");
+  v = v.replace(/(?!^)\+/g, "");
+  if (v && !v.startsWith("+")) v = "+" + v;
+  return v;
+}
+
 export function SignInForms({ callbackUrl }: { callbackUrl: string }) {
   const [stage, setStage] = useState<"phone" | "code">("phone");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(DEFAULT_DIAL_CODE);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,8 +40,16 @@ export function SignInForms({ callbackUrl }: { callbackUrl: string }) {
   const sendCode = async () => {
     setError(null);
     setInfo(null);
-    if (!/^\+[1-9]\d{6,14}$/.test(phone.trim())) {
-      setError("Phone must be in international format, e.g. +447700900123.");
+    const p = phone.trim();
+    if (p === "" || p === DEFAULT_DIAL_CODE || !/^\+[1-9]\d{6,14}$/.test(p)) {
+      // Explicit empty/default-only check so users get a useful message
+      // instead of the generic "international format" one when they hit
+      // the button with just "+91" in the field.
+      setError(
+        p === "" || p === DEFAULT_DIAL_CODE
+          ? `Type your phone number after ${DEFAULT_DIAL_CODE}. Example: ${DEFAULT_DIAL_CODE}9876543210.`
+          : `That doesn't look like a valid number. Use international format, e.g. ${DEFAULT_DIAL_CODE}9876543210.`,
+      );
       return;
     }
     setBusy(true);
@@ -83,14 +106,16 @@ export function SignInForms({ callbackUrl }: { callbackUrl: string }) {
       {stage === "phone" && (
         <>
           <p className="text-sm text-muted-foreground">
-            Enter your phone number in international format. We&apos;ll send a
-            6-digit code to your WhatsApp.
+            Enter your WhatsApp number. We&apos;ll send you a 6-digit code
+            to sign in.
           </p>
           <input
             type="tel"
+            inputMode="tel"
+            autoComplete="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+447700900123"
+            onChange={(e) => setPhone(sanitizePhone(e.target.value))}
+            placeholder={`${DEFAULT_DIAL_CODE}9876543210`}
             className={`w-full px-3 py-3 rounded-lg border bg-background font-mono text-base ${
               error ? "border-red-500/60" : "border-border"
             }`}
@@ -101,7 +126,10 @@ export function SignInForms({ callbackUrl }: { callbackUrl: string }) {
             autoFocus
           />
           <p className="text-[11px] text-muted-foreground">
-            Include your country code: <span className="font-mono">+44</span> UK, <span className="font-mono">+91</span> India, <span className="font-mono">+1</span> US.
+            Pre-filled with <span className="font-mono">{DEFAULT_DIAL_CODE}</span> for India.
+            Outside India? Delete it and type your own country code (
+            <span className="font-mono">+44</span> UK,{" "}
+            <span className="font-mono">+1</span> US, etc.).
           </p>
           {error && (
             <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-500">
