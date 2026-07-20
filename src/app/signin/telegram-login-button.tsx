@@ -17,8 +17,17 @@ import { useEffect, useRef } from "react";
 
 export function TelegramLoginButton({
   botUsername,
+  authUrl,
 }: {
   botUsername: string;
+  /**
+   * FULL absolute URL Telegram will 302 to after the user authorizes.
+   * The widget silently ignores relative URLs and falls back to the
+   * current page — which breaks sign-in because /signin doesn't know
+   * how to consume the HMAC-signed params. Passed in from the server
+   * component using AUTH_URL as the source of truth.
+   */
+  authUrl: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -35,10 +44,10 @@ export function TelegramLoginButton({
     script.setAttribute("data-telegram-login", botUsername);
     script.setAttribute("data-size", "large");
     script.setAttribute("data-radius", "8");
-    script.setAttribute("data-auth-url", "/api/auth/telegram-login");
+    script.setAttribute("data-auth-url", authUrl);
     script.setAttribute("data-request-access", "write");
     container.appendChild(script);
-  }, [botUsername]);
+  }, [botUsername, authUrl]);
 
   return <div ref={containerRef} className="flex justify-center" />;
 }

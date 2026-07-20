@@ -26,6 +26,15 @@ export default async function SignInPage({
   const { error } = await searchParams;
 
   const botUsername = process.env.TELEGRAM_BOT_USERNAME;
+  // Absolute callback URL for the Telegram widget. The widget silently
+  // ignores relative URLs and defaults to the current page, which would
+  // route the signed callback to /signin (no verifier there) instead of
+  // /api/auth/telegram-login. AUTH_URL is our canonical origin.
+  const authBase = (process.env.AUTH_URL ?? "https://paperloft.uk").replace(
+    /\/$/,
+    "",
+  );
+  const telegramAuthUrl = `${authBase}/api/auth/telegram-login`;
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6 py-10">
@@ -48,7 +57,7 @@ export default async function SignInPage({
 
         {botUsername ? (
           <div className="space-y-3">
-            <TelegramLoginButton botUsername={botUsername} />
+            <TelegramLoginButton botUsername={botUsername} authUrl={telegramAuthUrl} />
             <p className="text-xs text-center text-muted-foreground">
               Tap the blue Telegram button above. Telegram will open, ask
               you to confirm, and bring you back signed in.
