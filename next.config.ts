@@ -5,10 +5,15 @@ const nextConfig: NextConfig = {
   output: "standalone",
   experimental: {
     serverActions: {
-      // Cloudflare tunnel forwards requests from paperloft.regiq.in — allow
-      // Server Actions submitted from that origin. Add other domains here
-      // if you front the app with additional hostnames.
-      allowedOrigins: ["paperloft.regiq.in"],
+      // All public hostnames the Cloudflare tunnel routes to this container.
+      // middleware.ts 308-redirects the aliases to paperloft.uk, but Server
+      // Actions submitted during the redirect hop need the origin whitelisted
+      // or Next.js rejects them.
+      allowedOrigins: [
+        "paperloft.uk",
+        "www.paperloft.uk",
+        "paperloft.regiq.in",
+      ],
     },
   },
 };
