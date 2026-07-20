@@ -190,5 +190,14 @@ export async function sendWhatsApp(toE164: string, message: string): Promise<Wha
     sessionOfflineSince = null;
     console.log("[wasender] session back online after outage");
   }
+  // Log every successful send so we can trace "user says they never got
+  // the message" complaints. Wasender sometimes returns success for a
+  // recipient who has us blocked / never messaged us / has a stale LID,
+  // and the message silently vanishes. Having the messageId + timestamp
+  // logged is the difference between "we don't know" and "we sent it, ask
+  // them to check their spam / unblock our number".
+  console.log(
+    `[wasender] sent ok → to=${toE164} msgId=${json.messageId ?? "?"} preview=${JSON.stringify(message.slice(0, 40))}`,
+  );
   return { ok: true, messageId: json.messageId };
 }
