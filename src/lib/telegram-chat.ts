@@ -144,12 +144,29 @@ export async function handleTelegramMessage(
     console.log(`[telegram-chat] chat=${chatId} tools=[${toolCalls.join(",")}] reply-len=${reply.length}`);
     // If the model returned no text but DID call tools, don't drop them on
     // the floor with "(no reply)" — surface what actually happened.
+    if (!reply && toolCalls.length === 0) {
+      // Haiku returns empty when the conversation history contains prior
+      // "I couldn't come up with anything useful" assistant turns —
+      // pattern-matches and mimics. Retry with ONLY the current user
+      // message, no history, minimal system.
+      console.warn(`[telegram-chat] empty reply — retrying clean`);
+      try {
+        const retry = await generateText({
+          model: openrouter.chat(CHAT_MODEL),
+          system: "You are Paperloft Assistant, a friendly AI. Reply warmly and briefly. Never return empty text. If greeted, greet back and offer one concrete example (reminders, browsing, docs).",
+          messages: [{ role: "user", content: userText }],
+        });
+        reply = retry.text.trim();
+        console.log(`[telegram-chat] retry reply-len=${reply.length}`);
+      } catch (err) {
+        console.error("[telegram-chat] retry threw:", err);
+      }
+    }
     if (!reply) {
-      const summary = toolCalls.length
-        ? `I called ${toolCalls.length} tools (${[...new Set(toolCalls)].join(", ")}) but didn't have anything final to say — the flow probably got stuck partway. Try being more specific about the site or step you want me to try.`
-        : "I couldn't come up with anything useful. Try rephrasing?";
-      console.warn(`[telegram-chat] empty reply after ${toolCalls.length} tool calls`);
-      reply = summary;
+      reply = toolCalls.length
+        ? `I called ${toolCalls.length} tool(s) but got tangled up before I could summarise. Try naming the site or step you want me to try.`
+        : `Hey! 👋 I got your message. Try asking me something concrete like "remind me to call mum at 8pm" or "search flights London to Delhi Friday".`;
+      console.warn(`[telegram-chat] final fallback fired (toolCalls=${toolCalls.length})`);
     }
   } catch (err) {
     console.error("[telegram-chat] generateText threw:", err);

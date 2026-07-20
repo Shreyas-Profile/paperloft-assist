@@ -141,6 +141,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const tg = /^tg-(\d+)@telegram\.paperloft\.local$/.exec(user.email);
       if (tg) {
         const chatId = tg[1];
+        // First time this chatId has been seen? Determines whether we send
+        // a welcome DM (only on the FIRST sign-in, not every subsequent one).
+        const existingLink = await prisma.telegramLink
+          .findUnique({ where: { userEmail: user.email } })
+          .catch(() => null);
+        const isFirstTime = !existingLink;
         await prisma.telegramLink
           .upsert({
             where: { userEmail: user.email },
@@ -163,6 +169,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             update: { telegramChatId: chatId },
           })
           .catch((e) => console.error("[auth] tg channel-pref upsert failed:", e));
+        if (isFirstTime) {
+          // Fire-and-forget welcome DM. Users (especially older ones) need
+          // concrete proof the bot is wired up + a nudge on what to try
+          // first. Otherwise they land on /chat, don't know what to say,
+          // and drop off.
+          const firstName = user.name?.split(/\s+/)[0] ?? "there";
+          const welcome =
+            `👋 Hi ${firstName}! I'm your Paperloft Assistant.\n\n` +
+            `You're all signed in. You can talk to me here on Telegram OR on the website — same brain, same memory.\n\n` +
+            `Try one of these to get started:\n\n` +
+            `• "Remind me to call mum at 8pm"\n` +
+            `• "What flights are there from London to Delhi on Friday?"\n` +
+            `• "Every Monday at 9am, summarise what happened last week"\n\n` +
+            `Or just tell me what you want done — I'll figure it out.`;
+          const { sendTelegramToChatId } = await import("./telegram-bot");
+          void sendTelegramToChatId(chatId, welcome).catch(() => undefined);
+        }
       }
     },
   },
