@@ -155,9 +155,10 @@ export async function handleTelegramMessage(
         const retry = await generateText({
           model: openrouter.chat(CHAT_MODEL),
           system:
+            timeContext + "\n\n" +
             SYSTEM_PROMPT +
             (enabled.has("reminders") ? "\n\n" + reminderSkill.systemPrompt : "") +
-            "\n\nYou are speaking to the user on Telegram. Reply warmly and briefly. Never return empty text. If they ask you to do something a tool can do, CALL THE TOOL — don't say you can't.",
+            "\n\nYou are speaking to the user on Telegram. Reply warmly and briefly. Never return empty text. If they ask you to do something a tool can do, CALL THE TOOL — don't say you can't. For relative times ('in 30 min', '2 days from now', 'tomorrow 9am', 'next Monday'), resolve them against the Current UTC time above and convert to ISO 8601 UTC before calling reminder_create.",
           messages: [{ role: "user", content: userText }],
           tools: filterTools(
             {

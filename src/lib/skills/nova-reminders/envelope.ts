@@ -29,12 +29,23 @@ export function buttonsFor(r: Reminder): ReminderButton[] {
   return btns;
 }
 
-/** Render the reminder body text. Kept short — channels have length quirks. */
+/** Render the reminder body text. Kept short — channels have length quirks.
+ * Scheduler already prepends "⏰ Reminder:" for general type; here we add
+ * a friendlier verb for medication/appointment and just the title for
+ * general (avoids the double-"Reminder:" that the scheduler prefix +
+ * a verbal prefix here would produce). */
 export function bodyFor(r: Reminder): string {
   const lines: string[] = [];
   const emoji =
     r.type === "medication" ? "💊" : r.type === "appointment" ? "📅" : "🔔";
-  lines.push(`${emoji} ${r.title}`);
+  const prefix =
+    r.type === "medication"
+      ? `${emoji} Time to take: ${r.title}`
+      : r.type === "appointment"
+      ? `${emoji} Appointment: ${r.title}`
+      : `${emoji} ${r.title}`;
+  lines.push(prefix);
+  if (r.description) lines.push("");
   if (r.description) lines.push(r.description);
   return lines.join("\n");
 }
