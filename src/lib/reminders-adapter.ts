@@ -18,6 +18,7 @@ import { generateText } from "ai";
 import { prisma } from "./db";
 import { openrouter, CHAT_MODEL } from "./openrouter";
 import { sendWhatsApp } from "./wasender";
+import { sendTelegramToChatId } from "./telegram-bot";
 import { getIntegration } from "./integrations";
 import { appendMessage } from "./chat";
 import type { SkillContext } from "./skills/nova-reminders/context";
@@ -117,18 +118,52 @@ async function deliverEnvelope(env: MessageEnvelope): Promise<void> {
     return;
   }
 
-  // Telegram — not wired to a delivery API yet. Log so the tick loop marks
-  // the fire as attempted; wire the real telegram-mcp callback in v2.
+  // Telegram — send via @PaperloftAssistantBot to the user's linked chatId.
+  // Ack buttons are appended as text ("reply 'taken'" style) rather than
+  // Telegram inline keyboards to match the WhatsApp path — the webhook
+  // routes plain-text acks through the same reminder_ack tool.
   if (env.channels.includes("telegram")) {
-    console.warn(
-      `[reminders-adapter] Telegram delivery not wired — envelope ${env.envelopeId} ` +
-        `for ${env.userId} dropped. Enable WhatsApp as default channel via ` +
-        `channel_prefs_update, or wire telegram-mcp here.`,
-    );
-    // Not throwing: without this, the scheduler retries forever. Treating as
-    // a successful "delivery" of nothing lets the state machine move on.
+    const chatId = await resolveTelegramChatId(env.userId);
+    if (!chatId) {
+      throw new Error(
+        `No Telegram chatId configured for ${env.userId}. ` +
+          "Sign in via the Telegram Login Widget or link the bot from Settings.",
+      );
+    }
+    const buttonLine =
+      env.buttons.length > 0
+        ? "\n\n" + env.buttons.map((b) => `- ${b.label} (reply "${b.id}")`).join("\n")
+        : "";
+    const fullText = env.text + buttonLine;
+    const send = await sendTelegramToChatId(chatId, fullText);
+    if (!send.ok) throw new Error(`sendTelegramToChatId: ${send.reason || "unknown"}`);
+    // Log the fire into the Telegram conversation so a follow-up ack reply
+    // has the same in-context lookup that WhatsApp has via wa_ convId.
+    const convId = `tg_${chatId}`;
+    const conv = await prisma.conversation
+      .findUnique({ where: { id: convId }, select: { id: true } })
+      .catch(() => null);
+    if (conv) {
+      await appendMessage(convId, "assistant", fullText).catch((e) =>
+        console.warn(`[reminders-adapter] failed to log fire to ${convId}:`, e),
+      );
+    }
     return;
   }
+}
+
+async function resolveTelegramChatId(userEmail: string): Promise<string | null> {
+  const pref = await prisma.userChannelPref.findUnique({
+    where: { userId: userEmail },
+    select: { telegramChatId: true },
+  });
+  if (pref?.telegramChatId) return pref.telegramChatId;
+  // Fallback: look up via the telegram_links table (populated on OAuth sign-in).
+  const link = await prisma.telegramLink.findUnique({
+    where: { userEmail },
+    select: { chatId: true },
+  });
+  return link?.chatId ?? null;
 }
 
 async function resolveWhatsappNumber(userEmail: string): Promise<string | null> {
