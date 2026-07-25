@@ -44,18 +44,15 @@ export const SKILL_TOOLS: Record<string, string[]> = {
 };
 
 // Tools that are always on (not gated by any skill).
-// - fetch_url: Jina Reader — cheap, static HTML fetches.
-// - browser_*: real Chrome on Hetzner (browser-mcp) — for JS-heavy sites.
+//
+// Kept intentionally small — the assistant is positioned as a reminders-first
+// personal assistant right now, so we do NOT put generic web-browsing or
+// fetch tools on the toolbelt. The skill modules (`hosted-browser`,
+// `hosted-tor`, `findOpportunitiesTool` / `fetch_url`) still exist and can
+// be re-enabled here later without any code changes.
+//
 // - cron_*: hosted cron scheduling (cron-mcp).
 export const ALWAYS_ON_TOOLS = [
-  "fetch_url",
-  "browser_navigate",
-  "browser_snapshot",
-  "browser_click",
-  "browser_type",
-  "browser_press_key",
-  "browser_wait_for",
-  "browser_read_page",
   "cron_schedule",
   "cron_list",
   "cron_delete",

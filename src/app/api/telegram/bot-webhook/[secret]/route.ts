@@ -2,30 +2,81 @@
 //
 // URL: /api/telegram/bot-webhook/<TELEGRAM_WEBHOOK_SECRET>
 //
-// Handles TWO things:
+// Handles:
 //
-//   1. `/start <nonce>` — deep-link from Settings → Connect Telegram. We look
-//      up the nonce, mark the sender's chat_id linked to that user's email,
-//      then reply "✅ Linked".
+//   1. `/start <nonce>` — deep-link from Settings → Connect Telegram. Mark
+//      the sender's chat_id linked to that user's email, reply "✅ Linked".
 //
-//   2. `/start` (no arg) — user found the bot organically. Reply with a
-//      short intro telling them to link from the Paperloft settings page.
+//   2. `/start` (no arg / with `welcome`) — user either found the bot
+//      organically or hit the sign-in deep link. If the chat is already
+//      linked, send the welcome DM the sign-in flow couldn't (bot-chat
+//      privacy blocks bot-initiated DMs until the user messages the bot).
+//      Otherwise send a "sign in first" nudge.
 //
-// Every other inbound message is currently ignored — future work: forward
-// to the chat backend so users can talk to Paperloft over Telegram.
+//   3. Plain text messages — route through handleTelegramMessage.
+//
+//   4. Voice notes, photos, PDFs — download from Telegram, run through
+//      transcribe/describe/summarise, then hand the resulting text to
+//      handleTelegramMessage as if the user had typed it.
+//
+//   5. Word docs (.doc / .docx) — friendly "save as PDF for now" reply;
+//      no npm parser wired yet.
 
 import { NextResponse } from "next/server";
 import { sendTelegramToChatId } from "@/lib/telegram-bot";
 import { prisma } from "@/lib/db";
 import { handleTelegramMessage } from "@/lib/telegram-chat";
+import {
+  transcribeVoice,
+  describeImage,
+  summarisePdf,
+  isPdf,
+  isImage,
+  isWordDoc,
+  type TelegramFileRef,
+} from "@/lib/telegram-media";
 
 export const runtime = "nodejs";
+
+interface TgVoice {
+  file_id: string;
+  file_size?: number;
+  mime_type?: string;
+  duration: number;
+}
+
+interface TgAudio {
+  file_id: string;
+  file_size?: number;
+  mime_type?: string;
+  file_name?: string;
+  duration: number;
+}
+
+interface TgPhotoSize {
+  file_id: string;
+  file_size?: number;
+  width: number;
+  height: number;
+}
+
+interface TgDocument {
+  file_id: string;
+  file_size?: number;
+  mime_type?: string;
+  file_name?: string;
+}
 
 interface TgMessage {
   message_id: number;
   chat: { id: number; type: string };
   from?: { id: number; username?: string; first_name?: string };
   text?: string;
+  caption?: string;
+  voice?: TgVoice;
+  audio?: TgAudio;
+  photo?: TgPhotoSize[];
+  document?: TgDocument;
 }
 
 interface TgUpdate {
@@ -44,23 +95,20 @@ export async function POST(
   }
   const update = (await req.json().catch(() => null)) as TgUpdate | null;
   const msg = update?.message;
-  if (!msg?.text) return NextResponse.json({ ok: true });
+  if (!msg) return NextResponse.json({ ok: true });
 
   const chatId = String(msg.chat.id);
-  const text = msg.text.trim();
 
-  if (text.startsWith("/start")) {
+  // ---- /start handling (text-only) ----------------------------------------
+  if (msg.text?.trim().startsWith("/start")) {
+    const text = msg.text.trim();
     const parts = text.split(/\s+/);
-    const nonce = parts[1];
+    const nonce = parts[1] && parts[1] !== "welcome" ? parts[1] : undefined;
     if (nonce) {
       await handleLinkNonce(chatId, nonce, msg).catch((err) =>
         console.error("[tg-webhook] handleLinkNonce threw:", err),
       );
     } else {
-      // Plain /start. If this chatId is already linked (widget sign-in
-      // already ran events.signIn and created the row), send the welcome
-      // DM we couldn't send at sign-in time (bot-chat privacy blocks
-      // bot-initiated DMs until the user messages us first — /start counts).
       const link = await prisma.telegramLink
         .findFirst({ where: { chatId } })
         .catch(() => null);
@@ -71,9 +119,9 @@ export async function POST(
           `I'm your Paperloft Assistant. You can chat with me here on Telegram OR on paperloft.uk — same brain, same memory.\n\n` +
           `Try one of these to get started:\n\n` +
           `• "Remind me to call mum at 8pm"\n` +
-          `• "What flights are there from London to Delhi on Friday?"\n` +
-          `• "Every Monday at 9am, summarise what happened last week"\n\n` +
-          `Or just tell me what you want done — I'll figure it out.`;
+          `• "Every Monday at 9am, remind me to take the bins out"\n` +
+          `• Send a voice note, a photo, or a PDF and I'll read it\n\n` +
+          `Or just tell me what you want done.`;
         await sendTelegramToChatId(chatId, welcome).catch(() => undefined);
       } else {
         await sendTelegramToChatId(
@@ -85,17 +133,150 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
-  // Any other text → route to the AI. Fire-and-forget so we return 200 to
-  // Telegram immediately (they retry on non-200 within a short window,
-  // which would duplicate the reply).
+  // ---- Text messages ------------------------------------------------------
+  if (msg.text) {
+    routeToChat(chatId, msg.text);
+    return NextResponse.json({ ok: true });
+  }
+
+  // ---- Media messages -----------------------------------------------------
+  //
+  // All media handlers are fire-and-forget: we ack the webhook immediately
+  // so Telegram doesn't retry (which would double-process the file). Errors
+  // in the media pipeline are reported back to the user as a Telegram DM.
+
+  if (msg.voice || msg.audio) {
+    const ref = toRef(msg.voice ?? msg.audio!);
+    handleVoice(chatId, ref).catch((err) => {
+      console.error("[tg-webhook] handleVoice threw:", err);
+      sendTelegramToChatId(
+        chatId,
+        "Sorry — I couldn't process that voice note. Could you try typing it?",
+      ).catch(() => undefined);
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (msg.photo && msg.photo.length > 0) {
+    // Telegram sends multiple resolutions; pick the largest for best OCR.
+    const largest = [...msg.photo].sort(
+      (a, b) => b.width * b.height - a.width * a.height,
+    )[0];
+    const ref: TelegramFileRef = { file_id: largest.file_id, file_size: largest.file_size };
+    handlePhoto(chatId, ref, msg.caption).catch((err) => {
+      console.error("[tg-webhook] handlePhoto threw:", err);
+      sendTelegramToChatId(
+        chatId,
+        "Sorry — I couldn't process that photo. Could you try again?",
+      ).catch(() => undefined);
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (msg.document) {
+    const doc = msg.document;
+    if (isWordDoc(doc.mime_type, doc.file_name)) {
+      sendTelegramToChatId(
+        chatId,
+        "📄 Word docs aren't supported yet — save it as a PDF and send that. I read PDFs, images, and voice notes.",
+      ).catch(() => undefined);
+      return NextResponse.json({ ok: true });
+    }
+    if (isPdf(doc.mime_type, doc.file_name)) {
+      handleDocumentPdf(chatId, toRef(doc), msg.caption).catch((err) => {
+        console.error("[tg-webhook] handleDocumentPdf threw:", err);
+        sendTelegramToChatId(
+          chatId,
+          "Sorry — I couldn't read that PDF. Could you try re-sending it?",
+        ).catch(() => undefined);
+      });
+      return NextResponse.json({ ok: true });
+    }
+    if (isImage(doc.mime_type, doc.file_name)) {
+      // User attached an image as a "file" instead of a photo (keeps original
+      // resolution). Same code path as photo, different arrival shape.
+      handlePhoto(chatId, toRef(doc), msg.caption).catch((err) => {
+        console.error("[tg-webhook] handlePhoto (as doc) threw:", err);
+        sendTelegramToChatId(
+          chatId,
+          "Sorry — I couldn't process that image. Could you try again?",
+        ).catch(() => undefined);
+      });
+      return NextResponse.json({ ok: true });
+    }
+    sendTelegramToChatId(
+      chatId,
+      `📎 I got "${doc.file_name ?? "the file"}", but I can only read PDFs, images, and voice notes for now. Word support is on the way.`,
+    ).catch(() => undefined);
+    return NextResponse.json({ ok: true });
+  }
+
+  // Nothing we know how to handle — silent ack (avoids replying to stickers,
+  // location pings, group service events, etc.).
+  return NextResponse.json({ ok: true });
+}
+
+function toRef(x: {
+  file_id: string;
+  file_size?: number;
+  mime_type?: string;
+  file_name?: string;
+}): TelegramFileRef {
+  return {
+    file_id: x.file_id,
+    file_size: x.file_size,
+    mime_type: x.mime_type,
+    file_name: x.file_name,
+  };
+}
+
+// Route plain text through the chat handler and DM the reply back. Errors
+// surface as a generic reply so the user is never left silent.
+function routeToChat(chatId: string, text: string) {
   handleTelegramMessage(chatId, text)
     .then((reply) => sendTelegramToChatId(chatId, reply))
     .catch((err) => {
       console.error("[tg-webhook] chat handler threw:", err);
       return sendTelegramToChatId(chatId, "Something broke. Try again in a moment.");
     });
+}
 
-  return NextResponse.json({ ok: true });
+async function handleVoice(chatId: string, ref: TelegramFileRef) {
+  const transcript = await transcribeVoice(ref);
+  // Wrap so the LLM knows the source. Prevents "you said X" style
+  // hallucination when the transcript is short or ambiguous.
+  const wrapped = `[voice note] ${transcript}`;
+  routeToChat(chatId, wrapped);
+}
+
+async function handlePhoto(
+  chatId: string,
+  ref: TelegramFileRef,
+  caption?: string,
+) {
+  const description = await describeImage(ref, caption);
+  const captionPart = caption?.trim() ? ` (caption: "${caption.trim()}")` : "";
+  const wrapped =
+    `[user sent a photo${captionPart} — here's what I saw]\n\n${description}` +
+    (caption?.trim()
+      ? ""
+      : "\n\n[Please respond to the user based on the photo and let them know if you need more context.]");
+  routeToChat(chatId, wrapped);
+}
+
+async function handleDocumentPdf(
+  chatId: string,
+  ref: TelegramFileRef,
+  caption?: string,
+) {
+  const summary = await summarisePdf(ref, caption);
+  const captionPart = caption?.trim() ? ` (caption: "${caption.trim()}")` : "";
+  const wrapped =
+    `[user sent a PDF${captionPart} — here's a summary]\n\n${summary}` +
+    (caption?.trim()
+      ? ""
+      : "\n\n[Please respond helpfully. Ask what they want you to do with it if it's not obvious.]");
+  routeToChat(chatId, wrapped);
 }
 
 async function handleLinkNonce(chatId: string, nonce: string, msg: TgMessage) {

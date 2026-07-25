@@ -113,8 +113,7 @@ export async function handleTelegramMessage(
     SYSTEM_PROMPT +
     (enabled.has("reminders") ? "\n\n" + reminderSkill.systemPrompt : "") +
     "\n\nYou are speaking to the user on Telegram. Keep replies short and readable on a phone. Telegram supports basic markdown (**bold**, `code`) but not headings or tables." +
-    "\n\nWhen you need to interact with a live web page (search flights, check prices, click through anything JS-rendered), call `browser_navigate` first, then `browser_snapshot`, then act on the uids. Do NOT tell the user you 'tried a search' unless you actually called those tools." +
-    "\n\nSite hints for flights: our browser runs from a Hetzner IP in Germany, so google.com puts a cookie consent wall in front of Google Flights. Prefer `https://www.skyscanner.net/`, `https://www.kayak.co.uk/flights`, or `https://www.momondo.co.uk/` — same data, no consent wall. Momondo often shows headline 'from £X' prices even in the initial HTML, so `fetch_url` on it can work as a fast fallback if the browser gets stuck.";
+    "\n\nThe user can send you voice notes, photos, and PDFs on Telegram — those arrive here already transcribed / described / summarised by the webhook. Treat the text you see as what they actually said or sent. If the user says they attached something and the message doesn't contain it, ask them to resend — don't guess at the contents.";
 
   const toolBundle = filterTools(
     {

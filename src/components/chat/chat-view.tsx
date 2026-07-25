@@ -106,15 +106,14 @@ export function ChatView({
 
                 <div className="rounded-lg border border-border/60 bg-foreground/[0.02] p-4 space-y-2">
                   <div className="text-[11px] uppercase tracking-widest text-accent font-semibold">
-                    What I can do
+                    What I can do today
                   </div>
                   <ul className="text-sm text-muted-foreground space-y-1.5">
-                    <li>⏰ <span className="text-foreground">Set reminders + medication schedules</span> — <em>&quot;remind me to call mum at 8pm&quot;</em></li>
-                    <li>💊 <span className="text-foreground">Read a prescription</span> — send a photo or text and I&apos;ll schedule the meds</li>
-                    <li>🌐 <span className="text-foreground">Browse real websites</span> — flights, prices, jobs, forms</li>
-                    <li>📎 <span className="text-foreground">Read your documents</span> — attach a PDF and ask questions (page-cited)</li>
-                    <li>⏱️ <span className="text-foreground">Schedule prompts on cron</span> — &quot;every Monday at 9am, summarise my week&quot;</li>
-                    <li>🧅 <span className="text-foreground">Fetch through Tor</span> when you want an anonymous request</li>
+                    <li>⏰ <span className="text-foreground">Set reminders</span> — <em>&quot;remind me to call mum at 8pm&quot;</em></li>
+                    <li>🔁 <span className="text-foreground">Repeating schedules</span> — <em>&quot;every Monday at 9am, take out the bins&quot;</em></li>
+                    <li>💊 <span className="text-foreground">Medication timings + prescription photos</span> — auto-schedule Taken/Snooze/Skip acks</li>
+                    <li>📱 <span className="text-foreground">Voice notes, photos, PDFs on Telegram</span> — I read them and act</li>
+                    <li>🧩 <span className="text-foreground">Bring your own MCP skills</span> — add them from <a href="/skills" className="underline hover:text-foreground">Skills</a></li>
                   </ul>
                 </div>
 
@@ -123,13 +122,21 @@ export function ChatView({
                     Two ways to reach me
                   </div>
                   <p className="text-muted-foreground">
-                    Chat here in your browser, or message me on{" "}
-                    <span className="text-foreground font-medium">WhatsApp</span> —
-                    the OTP number I texted you (<span className="font-mono">+91 8660149805</span>).
-                    Replies, ack buttons on reminders, and prescription photos all work the same way over there.
-                    You can also link{" "}
-                    <a href="/skills" className="underline hover:text-foreground">Telegram</a>
-                    {" "}from the Skills page.
+                    Chat here in your browser, or message{" "}
+                    <span className="font-mono text-foreground">@PaperloftAssistantBot</span>{" "}
+                    on Telegram. Same account, same brain. Reminders land as
+                    Telegram notifications and you can ack them right from the chat.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-border/60 bg-background p-4 text-sm">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+                    Coming soon
+                  </div>
+                  <p className="text-muted-foreground">
+                    Email management, phone calls, PowerPoint drafting, calendar
+                    sync — reminders is where we start, but the whole personal
+                    assistant is on the way.
                   </p>
                 </div>
 
