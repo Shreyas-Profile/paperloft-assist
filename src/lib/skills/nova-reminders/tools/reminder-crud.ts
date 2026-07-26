@@ -87,10 +87,10 @@ export function reminderCreate(ctx: SkillContext) {
 export function reminderList(ctx: SkillContext) {
   return tool({
     description:
-      "List the user's reminders. Filter by status/type/date range. Returns compact rows suitable for showing to the user.",
+      "List the user's reminders. Filter by status/type/date range. `status` defaults to 'pending'; pass 'all' when the user asks for EVERYTHING (past + current + cancelled), or a specific status when they want just one kind. Returns compact rows suitable for showing to the user.",
     inputSchema: z.object({
       status: z
-        .enum(["pending", "sent", "cancelled", "draft"])
+        .enum(["pending", "sent", "cancelled", "draft", "all"])
         .optional()
         .default("pending"),
       type: reminderTypeEnum.optional(),
@@ -101,8 +101,12 @@ export function reminderList(ctx: SkillContext) {
     execute: async (input) => {
       const where: Record<string, unknown> = {
         userId: ctx.userId,
-        status: input.status,
       };
+      // 'all' means don't filter by status at all — the LLM reaches for this
+      // when the user says "show me everything" or "all my reminders".
+      if (input.status !== "all") {
+        where.status = input.status;
+      }
       if (input.type) where.type = input.type;
       if (input.fromDate || input.toDate) {
         const dueAt: Record<string, Date> = {};

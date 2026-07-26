@@ -25,7 +25,7 @@ import { createReminderSkill } from "./skills/nova-reminders";
 import { makeReminderCtx } from "./reminders-adapter";
 import { makeUserByoSkills, listByoToolNames } from "./user-skills";
 
-const HISTORY_LIMIT = 20;
+const HISTORY_LIMIT = 30;
 const TELEGRAM_MAX_CHARS = 4000; // Telegram's cap is 4096; leave headroom.
 const STEP_CAP = 8; // was 25 — Haiku hallucinates confirmations if given too many silent steps.
 
@@ -34,10 +34,14 @@ const CONNECT_HINT =
   "Open https://paperloft.uk/settings and hit 'Connect Telegram bot' to link this chat to your account. Then message me here and I'll reply as your assistant.";
 
 // Reply-text patterns that indicate the model CLAIMED to have persisted a
-// reminder. If we see these but no reminder_* tool was actually called this
-// turn, that's a hallucination — retry with a forced tool call.
+// reminder. Tight-by-design — earlier looser patterns misfired on:
+//   • "want me to set up reminders?"   (offer, not claim)
+//   • "you're all set with that reminder" (idiom, not verb)
+//   • "adjust the appointment reminder" (mention, not claim)
+// so we now require an unambiguous first-person past-tense claim or the
+// explicit "reminder is/has been ..." construction the M REVATI bug used.
 const REMINDER_CLAIM_RE =
-  /\b(reminder\s+(?:is\s+)?(?:set|created|scheduled|updated|deleted|removed|cancell?ed|already\s+(?:set|scheduled|created))|(?:set|scheduled|created|updated|deleted|cancell?ed).*reminder|i(?:'?ve| have)\s+(?:set|scheduled|created|updated|deleted|cancell?ed)\s+(?:a\s+)?reminder|✅\s*reminder|done[^.!?]*reminder|i'?ll\s+remind\s+you|already\s+(?:set|scheduled|created)\s+(?:for|to)|that\s+reminder\s+is\s+already)\b/i;
+  /(?:✅\s*reminder\s*(?:set|created|scheduled|updated|deleted|cancell?ed)|reminder\s+(?:is|has\s+been)\s+(?:set|created|scheduled|updated|deleted|removed|cancell?ed)|i(?:'?ve| have)\s+(?:set|scheduled|created|updated|deleted|cancell?ed)\s+(?:a\s+|the\s+|your\s+|that\s+)?reminder|done[!.\s]+i(?:'?ve| have)\s+(?:set|scheduled|created)|i'?ll\s+remind\s+you\s+(?:at|in|on|when|tomorrow|today|next|every))/i;
 
 function filterTools<T extends Record<string, unknown>>(
   allTools: T,
@@ -81,12 +85,19 @@ export async function handleTelegramMessage(
 
   await appendMessage(convId, "user", userText);
 
-  const history = await prisma.message.findMany({
+  // Take the MOST RECENT HISTORY_LIMIT messages, then flip back to
+  // chronological order. Original `orderBy: asc, take: N` returned the
+  // OLDEST N messages, so once the conversation grew past N the LLM
+  // stopped seeing anything recent — including the previous turn.
+  // Real bug: Shreyas asked "not just new.. everything i have" as a
+  // follow-up and the bot had no idea what the previous message was.
+  const recent = await prisma.message.findMany({
     where: { conversationId: convId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: HISTORY_LIMIT,
     select: { role: true, content: true },
   });
+  const history = recent.reverse();
 
   const messages: ModelMessage[] = history.map((m) => ({
     role: m.role as "user" | "assistant" | "system",
@@ -151,9 +162,18 @@ export async function handleTelegramMessage(
     // reminder_* tool actually fired this turn → retry forcing a tool call.
     // This is the M REVATI bug — Haiku said "✅ Reminder set" 4 times for
     // one user and only 1 actually persisted.
+    //
+    // Guard: don't fire the retry when the reply is OFFERING to do something
+    // ("want me to set up reminders?", "shall I schedule that?") — the regex
+    // otherwise sees "set…reminders" and thinks it's a past claim. The guard
+    // keeps the (already correct) answer and skips a wasted retry LLM call.
     const claimedReminder = REMINDER_CLAIM_RE.test(reply);
+    const isOfferingAction =
+      /\b(want me to|would you like|shall i|should i|do you want me to|can i (?:set|schedule|create|add|update|delete|cancel|remind))\b/i.test(
+        reply,
+      );
     const calledReminder = mainToolCalls.some((t) => t.startsWith("reminder_"));
-    if (claimedReminder && !calledReminder && enabled.has("reminders")) {
+    if (claimedReminder && !calledReminder && !isOfferingAction && enabled.has("reminders")) {
       console.warn(
         `[telegram-chat] hallucination caught — claimed reminder without calling tool. Retrying with forced tool call.`,
       );
