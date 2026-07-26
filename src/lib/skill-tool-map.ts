@@ -32,6 +32,7 @@ export const SKILL_TOOLS: Record<string, string[]> = {
     "reminder_get",
     "reminder_update",
     "reminder_delete",
+    "reminder_delete_many",
     "reminder_ack",
     "reminder_missed",
     "prescription_ingest",

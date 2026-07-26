@@ -27,7 +27,7 @@ import { makeUserByoSkills, listByoToolNames } from "./user-skills";
 
 const HISTORY_LIMIT = 30;
 const TELEGRAM_MAX_CHARS = 4000; // Telegram's cap is 4096; leave headroom.
-const STEP_CAP = 8; // was 25 — Haiku hallucinates confirmations if given too many silent steps.
+const STEP_CAP = 15; // bumped from 8 after a "delete all 8 reminders" turn used up the whole cap and left no step for a summary — Shreyas got a lone ✅. 15 is enough for a batch of ~10 tool calls plus list+summary. Higher hallucination risk stays guarded by the post-hoc REMINDER_CLAIM_RE check below.
 
 const CONNECT_HINT =
   "You're not linked to a Paperloft account yet.\n\n" +
@@ -124,7 +124,9 @@ export async function handleTelegramMessage(
     SYSTEM_PROMPT +
     (enabled.has("reminders") ? "\n\n" + reminderSkill.systemPrompt : "") +
     "\n\nYou are speaking to the user on Telegram. Keep replies short and readable on a phone. Telegram supports basic markdown (**bold**, `code`) but not headings or tables." +
-    "\n\nThe user can send you voice notes, photos, and PDFs on Telegram — those arrive here already transcribed / described / summarised by the webhook. Treat the text you see as what they actually said or sent. If the user says they attached something and the message doesn't contain it, ask them to resend — don't guess at the contents.";
+    "\n\nThe user can send you voice notes, photos, and PDFs on Telegram — those arrive here already transcribed / described / summarised by the webhook. Treat the text you see as what they actually said or sent. If the user says they attached something and the message doesn't contain it, ask them to resend — don't guess at the contents." +
+    "\n\nTone: be direct. Don't apologise unless a tool actually failed with an error. Don't hedge with 'I'm not certain' or 'I think it went through' — if you don't know the state, CALL A TOOL to check (reminder_list, etc.), then answer definitively. After batch operations always report a one-line factual summary ('Deleted 6 reminders: [titles]. 3 still pending: [titles].'). Skip decorative emojis (🙏 🔧 ✨) — a single ✅ / ❌ for outcome is fine, everything else looks unprofessional." +
+    "\n\nWhen the user asks to 'delete all' / 'clear everything' / 'remove them all' and you don't yet have the list of IDs: call reminder_list(status='all') FIRST to get every id, then reminder_delete on each one in sequence, then reply with a single-line summary of what you cancelled. Do NOT ask the user for permission to try again or offer partial options unless a tool call genuinely errored.";
 
   const toolBundle = filterTools(
     {
@@ -149,9 +151,21 @@ export async function handleTelegramMessage(
       providerOptions: { openai: { parallelToolCalls: false } },
     });
     reply = result.text.trim();
+    let bulkCancelled = 0;
     for (const step of result.steps ?? []) {
       for (const call of step.toolCalls ?? []) {
         if (call?.toolName) mainToolCalls.push(call.toolName);
+      }
+      for (const tr of step.toolResults ?? []) {
+        if (
+          tr?.toolName === "reminder_delete_many" &&
+          tr.output &&
+          typeof tr.output === "object" &&
+          "cancelled" in tr.output &&
+          typeof (tr.output as { cancelled: unknown }).cancelled === "number"
+        ) {
+          bulkCancelled += (tr.output as { cancelled: number }).cancelled;
+        }
       }
     }
     console.log(
@@ -221,6 +235,42 @@ export async function handleTelegramMessage(
         console.error("[telegram-chat] forced-retry threw:", err);
         reply =
           "I couldn't get the reminder saved just now — please try again in a moment.";
+      }
+    }
+
+    // Thin-reply-after-work fallback: LLM did real tool work but didn't
+    // produce a summary (e.g. hit STEP_CAP mid-chain, or returned a bare
+    // "✅"). Build a deterministic factual line from what actually ran so
+    // the user sees something meaningful. Real bug: bulk "delete all
+    // reminders" ran 7 deletes then stopped with reply="✅", leaving the
+    // user thinking nothing happened.
+    if (reply.trim().length < 15 && mainToolCalls.length > 0) {
+      const counts: Record<string, number> = {};
+      for (const t of mainToolCalls) counts[t] = (counts[t] || 0) + 1;
+      // reminder_delete_many returns a count of how many rows it cancelled
+      // (captured in bulkCancelled above) — prefer that over just the call
+      // count so we report "cancelled 8 reminders" not "cancelled 1".
+      const deletedCount =
+        (counts.reminder_delete ?? 0) + (bulkCancelled || (counts.reminder_delete_many ?? 0));
+      const parts: string[] = [];
+      if (deletedCount)
+        parts.push(
+          `cancelled ${deletedCount} reminder${deletedCount > 1 ? "s" : ""}`,
+        );
+      if (counts.reminder_create)
+        parts.push(
+          `created ${counts.reminder_create} reminder${counts.reminder_create > 1 ? "s" : ""}`,
+        );
+      if (counts.reminder_update)
+        parts.push(
+          `updated ${counts.reminder_update} reminder${counts.reminder_update > 1 ? "s" : ""}`,
+        );
+      if (parts.length) {
+        const summary = `✅ Done — ${parts.join(", ")}.`;
+        reply = reply.trim() && reply.trim() !== "✅" ? `${reply.trim()} ${summary}` : summary;
+        console.warn(
+          `[telegram-chat] thin-reply after work — replaced with factual summary: "${reply}"`,
+        );
       }
     }
 

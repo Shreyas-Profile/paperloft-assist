@@ -209,3 +209,54 @@ export function reminderDelete(ctx: SkillContext) {
     },
   });
 }
+
+export function reminderDeleteMany(ctx: SkillContext) {
+  return tool({
+    description:
+      "Bulk-cancel reminders in a single call. Prefer this over looping reminder_delete when the user asks to remove multiple at once ('delete all my reminders', 'clear the medication ones'). Two modes: pass `ids` for a specific list, OR pass a filter (`status` and/or `type`) to cancel every matching reminder. Returns the count of reminders cancelled.",
+    inputSchema: z
+      .object({
+        ids: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Explicit reminder ids to cancel. Combine with reminder_list to get ids for e.g. 'cancel everything I have' → list all, then pass those ids here.",
+          ),
+        status: z
+          .enum(["pending", "sent", "cancelled", "draft", "all"])
+          .optional()
+          .describe(
+            "Filter cancels to reminders in this status. Use 'all' to nuke every reminder regardless of status.",
+          ),
+        type: reminderTypeEnum
+          .optional()
+          .describe("Filter cancels by reminder type (medication/appointment/general)."),
+      })
+      .refine(
+        (v) => (v.ids && v.ids.length > 0) || v.status || v.type,
+        {
+          message: "Must supply at least one of: ids, status, type.",
+        },
+      ),
+    execute: async (input) => {
+      const where: Record<string, unknown> = { userId: ctx.userId };
+      if (input.ids && input.ids.length > 0) {
+        where.id = { in: input.ids };
+      }
+      if (input.status && input.status !== "all") {
+        where.status = input.status;
+      }
+      if (input.type) {
+        where.type = input.type;
+      }
+      // Only cancel reminders that aren't already cancelled — avoids
+      // "cancelled 30 reminders" when 25 were already dead.
+      where.status = where.status ?? { not: "cancelled" };
+      const r = await ctx.prisma.reminder.updateMany({
+        where,
+        data: { status: "cancelled" },
+      });
+      return { cancelled: r.count };
+    },
+  });
+}

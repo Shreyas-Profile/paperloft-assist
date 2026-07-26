@@ -24,6 +24,7 @@ import {
   reminderGet,
   reminderUpdate,
   reminderDelete,
+  reminderDeleteMany,
 } from "./tools/reminder-crud";
 import {
   prescriptionIngest,
@@ -63,6 +64,22 @@ When the user wants to see, edit, or delete reminders:
 2. Use reminder_update / reminder_delete with the specific ID from the list.
 3. ONLY confirm after the tool returns success.
 
+When the user wants to bulk-delete ("delete all my reminders", "clear
+everything", "remove them all", "cancel every reminder I have"):
+- Prefer reminder_delete_many in ONE call. Two shapes:
+  a) reminder_delete_many({ status: "all" }) — nukes every reminder the
+     user has regardless of status. Use when the user says "everything"
+     with no qualifier.
+  b) reminder_list(status: "all") FIRST to get ids, then
+     reminder_delete_many({ ids: [...] }) — use when you want to show
+     the list before deleting or when you're deleting a subset.
+- Do NOT loop reminder_delete one at a time — it burns the step budget
+  and often stops mid-way, leaving reminders alive that the user asked
+  to delete.
+- After the call, reply with a single line summarising what was cancelled
+  (the tool returns { cancelled: N }). Don't ask "shall I try again?"
+  unless the tool actually returned an error.
+
 Medication defaults: type="medication", Taken/+10min/Skip ack buttons.
 Appointment defaults: type="appointment", Confirmed/Reschedule buttons.
 General defaults: type="general", no ack buttons unless user asks.
@@ -93,6 +110,7 @@ export function createReminderSkill(ctx: SkillContext): {
     reminder_get: reminderGet(ctx),
     reminder_update: reminderUpdate(ctx),
     reminder_delete: reminderDelete(ctx),
+    reminder_delete_many: reminderDeleteMany(ctx),
     reminder_ack: reminderAck(ctx),
     reminder_missed: missedList(ctx),
     prescription_ingest: prescriptionIngest(ctx),
