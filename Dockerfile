@@ -1,6 +1,12 @@
 FROM node:22-slim AS base
+# poppler-utils gives us `pdftoppm`, used by src/lib/telegram-media.ts to
+# rasterise every PDF page to a PNG before handing it to the vision model.
+# Trusting the model's own PDF handling misses image-only pages (scans,
+# stamped forms, photo-of-a-doc PDFs) on some providers, so we always
+# vision-process every page. openssl+ca-certificates stay for Prisma/HTTPS.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app

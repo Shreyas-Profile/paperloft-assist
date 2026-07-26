@@ -11,6 +11,18 @@
 //   2. Keeping the transcript/description as plain text means the whole
 //      conversation stays in text form for history, retry logic, and the
 //      hallucination-detection regex in telegram-chat.ts. Simpler is safer.
+//
+// PDF policy: we NEVER trust the model to render PDF pages itself. Providers
+// vary — some do vision on every page, some only extract text, some silently
+// drop image-only pages (scanned receipts, stamped forms, photo-of-a-doc).
+// Instead we shell out to `pdftoppm` (poppler-utils, baked into the image)
+// and hand each page in as a full-resolution PNG image block. Costs more per
+// PDF but makes the pipeline provider-independent and lossless.
+
+import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { generateText } from "ai";
 
@@ -182,37 +194,154 @@ export async function describeImage(
   return text.trim();
 }
 
-// ---- PDF summary (chat model, native document support) --------------------
+// ---- PDF summary — rasterise every page, treat each as a vision image ----
+//
+// `pdftoppm -r 150 in.pdf out -png` writes out-1.png, out-2.png, ...
+// 150 DPI is the sweet spot: OCR-legible for prescriptions, receipts, and
+// forms, but small enough that a 10-page document fits comfortably in one
+// vision call. Costs and latency scale linearly with page count, so we
+// hard-cap at MAX_PDF_PAGES and tell the user how many pages we skipped.
+
+const MAX_PDF_PAGES = 15;
+const PDF_RASTER_DPI = 150;
 
 export async function summarisePdf(
   ref: TelegramFileRef,
   caption?: string,
 ): Promise<string> {
-  const { bytes, mimeType, fileName } = await downloadRef(ref);
+  const { bytes, fileName } = await downloadRef(ref);
+  const pages = await rasterisePdfPages(bytes, MAX_PDF_PAGES, PDF_RASTER_DPI);
+
   const captionLine = caption?.trim()
     ? `\n\nThe user's caption on this document: "${caption.trim()}"`
     : "";
+  const truncatedLine =
+    pages.truncated > 0
+      ? `\n\n(Note: this PDF has more than ${MAX_PDF_PAGES} pages — I'm only looking at the first ${MAX_PDF_PAGES}. ${pages.truncated} page${pages.truncated === 1 ? "" : "s"} skipped.)`
+      : "";
+  const pageNoteForModel =
+    pages.images.length === 1
+      ? "This is a single-page PDF."
+      : `This PDF has ${pages.totalPages} pages${pages.truncated > 0 ? ` (first ${pages.images.length} shown)` : ""}. Each image below is one page in order.`;
+
+  const promptText =
+    `You're helping a personal-assistant bot process a PDF (${fileName ?? "document.pdf"}) the user just sent on Telegram. ` +
+    pageNoteForModel +
+    " Read every page — including handwriting, stamps, tables, form fields, and signatures — and produce a plain-text summary. " +
+    "Cover the key facts across all pages: what the document is, dates, names, amounts, deadlines, action items, medications, appointments. " +
+    "If any page is unreadable, say so instead of guessing. " +
+    "Keep the whole reply under 400 words. Plain text, no markdown headings." +
+    captionLine;
+
+  const content: Array<
+    | { type: "text"; text: string }
+    | { type: "file"; data: Buffer; mediaType: string }
+  > = [{ type: "text", text: promptText }];
+  for (const png of pages.images) {
+    content.push({ type: "file", data: png, mediaType: "image/png" });
+  }
+
   const { text } = await generateText({
     model: openrouter.chat(CHAT_MODEL),
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text:
-              `Summarise this PDF (${fileName ?? "document.pdf"}) for a personal-assistant chat. ` +
-              "Cover the key facts: what it is, dates, names, amounts, deadlines, action items. " +
-              "If it's an invoice, ticket, prescription, form, or bill, pull out the specific details. " +
-              "Keep it under 300 words. Plain text, no markdown headings." +
-              captionLine,
-          },
-          { type: "file", data: bytes, mediaType: mimeType },
-        ],
-      },
-    ],
+    messages: [{ role: "user", content }],
   });
-  return text.trim();
+  return (text.trim() + truncatedLine).trim();
+}
+
+interface RasterResult {
+  images: Buffer[];
+  totalPages: number;
+  truncated: number;
+}
+
+async function rasterisePdfPages(
+  pdfBytes: Buffer,
+  maxPages: number,
+  dpi: number,
+): Promise<RasterResult> {
+  const workDir = await fs.mkdtemp(path.join(tmpdir(), "pl-pdf-"));
+  const inputPath = path.join(workDir, "in.pdf");
+  const outPrefix = path.join(workDir, "page");
+  try {
+    await fs.writeFile(inputPath, pdfBytes);
+    // First figure out how many pages there are so we can honestly report
+    // truncation. `pdfinfo` also comes with poppler-utils.
+    const totalPages = await countPdfPages(inputPath);
+    const renderPages = Math.min(totalPages, maxPages);
+    // pdftoppm -f 1 -l N renders pages 1..N inclusive.
+    await runPdftoppm(inputPath, outPrefix, dpi, renderPages);
+    const files = (await fs.readdir(workDir))
+      .filter((f) => f.startsWith("page") && f.endsWith(".png"))
+      .sort(naturalPageSort);
+    const images: Buffer[] = [];
+    for (const f of files.slice(0, renderPages)) {
+      images.push(await fs.readFile(path.join(workDir, f)));
+    }
+    return {
+      images,
+      totalPages,
+      truncated: Math.max(0, totalPages - renderPages),
+    };
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+// pdftoppm suffixes filenames "page-1.png", "page-2.png", ... but for
+// documents with 10+ pages you get "page-10.png" between "page-1.png" and
+// "page-2.png" under lexicographic sort. Sort by the numeric suffix.
+function naturalPageSort(a: string, b: string): number {
+  const na = Number(a.match(/-(\d+)\.png$/)?.[1] ?? 0);
+  const nb = Number(b.match(/-(\d+)\.png$/)?.[1] ?? 0);
+  return na - nb;
+}
+
+function runPdftoppm(
+  inputPath: string,
+  outPrefix: string,
+  dpi: number,
+  lastPage: number,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("pdftoppm", [
+      "-r", String(dpi),
+      "-png",
+      "-f", "1",
+      "-l", String(lastPage),
+      inputPath,
+      outPrefix,
+    ]);
+    let stderr = "";
+    proc.stderr.on("data", (d) => (stderr += d.toString()));
+    proc.on("error", (err) =>
+      reject(new Error(`pdftoppm spawn failed: ${err.message}`)),
+    );
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`pdftoppm exit ${code}: ${stderr.slice(0, 500)}`));
+    });
+  });
+}
+
+function countPdfPages(inputPath: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("pdfinfo", [inputPath]);
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => (stdout += d.toString()));
+    proc.stderr.on("data", (d) => (stderr += d.toString()));
+    proc.on("error", (err) =>
+      reject(new Error(`pdfinfo spawn failed: ${err.message}`)),
+    );
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        return reject(new Error(`pdfinfo exit ${code}: ${stderr.slice(0, 500)}`));
+      }
+      const m = stdout.match(/^Pages:\s+(\d+)/m);
+      if (!m) return reject(new Error("pdfinfo: no page count in output"));
+      resolve(Number(m[1]));
+    });
+  });
 }
 
 // ---- MIME type classification --------------------------------------------
