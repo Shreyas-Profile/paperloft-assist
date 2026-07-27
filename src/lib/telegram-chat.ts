@@ -40,8 +40,66 @@ const CONNECT_HINT =
 //   • "adjust the appointment reminder" (mention, not claim)
 // so we now require an unambiguous first-person past-tense claim or the
 // explicit "reminder is/has been ..." construction the M REVATI bug used.
-const REMINDER_CLAIM_RE =
+export const REMINDER_CLAIM_RE =
   /(?:✅\s*reminder\s*(?:set|created|scheduled|updated|deleted|cancell?ed)|reminder\s+(?:is|has\s+been)\s+(?:set|created|scheduled|updated|deleted|removed|cancell?ed)|i(?:'?ve| have)\s+(?:set|scheduled|created|updated|deleted|cancell?ed)\s+(?:a\s+|the\s+|your\s+|that\s+)?reminder|done[!.\s]+i(?:'?ve| have)\s+(?:set|scheduled|created)|i'?ll\s+remind\s+you\s+(?:at|in|on|when|tomorrow|today|next|every))/i;
+
+// Guard against firing the hallucination-catch retry when the model is
+// OFFERING to do something ("want me to set up reminders?") rather than
+// CLAIMING it did — the M REVATI regex would otherwise trigger a wasted
+// retry.
+export const OFFER_LANGUAGE_RE =
+  /\b(want me to|would you like|shall i|should i|do you want me to|can i (?:set|schedule|create|add|update|delete|cancel|remind))\b/i;
+
+/**
+ * Pure helper: pick the LAST `limit` messages from a full history array,
+ * preserving chronological order. Extracted for unit-testability — the
+ * original inline `findMany orderBy asc take N` bug returned the OLDEST
+ * N messages, silently invisible until the conversation grew past N.
+ * The DB query itself now uses `orderBy desc take N + reverse`; this
+ * helper mirrors that shape for other code paths that receive pre-fetched
+ * history and want the same slice guarantee.
+ */
+export function sliceRecentMessages<T>(all: T[], limit: number): T[] {
+  if (limit <= 0) return [];
+  if (all.length <= limit) return all.slice();
+  return all.slice(all.length - limit);
+}
+
+/**
+ * Pure helper: build a factual "Done — cancelled N reminders" summary
+ * from the tool-call names + bulk-cancel count when the LLM produced a
+ * thin reply (empty or a bare "✅"). Returns null when there's nothing
+ * meaningful to summarise so the caller keeps whatever text it had.
+ *
+ * bulkCancelled = total rows the reminder_delete_many tool reports
+ * cancelled (from tool result). reminder_delete individual calls count 1 each.
+ */
+export function buildThinReplySummary(
+  mainToolCalls: string[],
+  bulkCancelled: number,
+  currentReply: string,
+): string | null {
+  const counts: Record<string, number> = {};
+  for (const t of mainToolCalls) counts[t] = (counts[t] || 0) + 1;
+  const deletedCount =
+    (counts.reminder_delete ?? 0) + (bulkCancelled || (counts.reminder_delete_many ?? 0));
+  const parts: string[] = [];
+  if (deletedCount)
+    parts.push(`cancelled ${deletedCount} reminder${deletedCount > 1 ? "s" : ""}`);
+  if (counts.reminder_create)
+    parts.push(
+      `created ${counts.reminder_create} reminder${counts.reminder_create > 1 ? "s" : ""}`,
+    );
+  if (counts.reminder_update)
+    parts.push(
+      `updated ${counts.reminder_update} reminder${counts.reminder_update > 1 ? "s" : ""}`,
+    );
+  if (parts.length === 0) return null;
+  const summary = `✅ Done — ${parts.join(", ")}.`;
+  return currentReply.trim() && currentReply.trim() !== "✅"
+    ? `${currentReply.trim()} ${summary}`
+    : summary;
+}
 
 function filterTools<T extends Record<string, unknown>>(
   allTools: T,
@@ -182,10 +240,7 @@ export async function handleTelegramMessage(
     // otherwise sees "set…reminders" and thinks it's a past claim. The guard
     // keeps the (already correct) answer and skips a wasted retry LLM call.
     const claimedReminder = REMINDER_CLAIM_RE.test(reply);
-    const isOfferingAction =
-      /\b(want me to|would you like|shall i|should i|do you want me to|can i (?:set|schedule|create|add|update|delete|cancel|remind))\b/i.test(
-        reply,
-      );
+    const isOfferingAction = OFFER_LANGUAGE_RE.test(reply);
     const calledReminder = mainToolCalls.some((t) => t.startsWith("reminder_"));
     if (claimedReminder && !calledReminder && !isOfferingAction && enabled.has("reminders")) {
       console.warn(
@@ -243,31 +298,12 @@ export async function handleTelegramMessage(
     // "✅"). Build a deterministic factual line from what actually ran so
     // the user sees something meaningful. Real bug: bulk "delete all
     // reminders" ran 7 deletes then stopped with reply="✅", leaving the
-    // user thinking nothing happened.
+    // user thinking nothing happened. Delegated to buildThinReplySummary
+    // (exported for unit tests) so the logic doesn't drift.
     if (reply.trim().length < 15 && mainToolCalls.length > 0) {
-      const counts: Record<string, number> = {};
-      for (const t of mainToolCalls) counts[t] = (counts[t] || 0) + 1;
-      // reminder_delete_many returns a count of how many rows it cancelled
-      // (captured in bulkCancelled above) — prefer that over just the call
-      // count so we report "cancelled 8 reminders" not "cancelled 1".
-      const deletedCount =
-        (counts.reminder_delete ?? 0) + (bulkCancelled || (counts.reminder_delete_many ?? 0));
-      const parts: string[] = [];
-      if (deletedCount)
-        parts.push(
-          `cancelled ${deletedCount} reminder${deletedCount > 1 ? "s" : ""}`,
-        );
-      if (counts.reminder_create)
-        parts.push(
-          `created ${counts.reminder_create} reminder${counts.reminder_create > 1 ? "s" : ""}`,
-        );
-      if (counts.reminder_update)
-        parts.push(
-          `updated ${counts.reminder_update} reminder${counts.reminder_update > 1 ? "s" : ""}`,
-        );
-      if (parts.length) {
-        const summary = `✅ Done — ${parts.join(", ")}.`;
-        reply = reply.trim() && reply.trim() !== "✅" ? `${reply.trim()} ${summary}` : summary;
+      const summarised = buildThinReplySummary(mainToolCalls, bulkCancelled, reply);
+      if (summarised) {
+        reply = summarised;
         console.warn(
           `[telegram-chat] thin-reply after work — replaced with factual summary: "${reply}"`,
         );

@@ -1,0 +1,70 @@
+# Continuous integration for paperloft-assist.
+# On every push and PR: install deps → generate Prisma client → type-check
+# → run the Vitest suite. Fails loud so nothing broken merges to main.
+#
+# What this doesn't do yet (later rounds):
+#   - Deploy on merge (currently manual: scp + docker compose build/up).
+#   - Integration tests against a real Postgres (needs a service container).
+#   - Lint gating (pnpm lint) — turn on once the existing warnings are cleaned.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: type-check + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # --no-frozen-lockfile matches the local dev workflow; flip to
+        # frozen once the lockfile is committed cleanly.
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generate Prisma client
+        # env.ts eagerly zod-parses at import time; provide placeholder
+        # secrets so the parse succeeds. Real secrets come from Hetzner
+        # at runtime — none of these values are ever used by tests.
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          AUTH_SECRET: ci-placeholder
+          AUTH_GOOGLE_ID: ci-placeholder
+          AUTH_GOOGLE_SECRET: ci-placeholder
+          OPENROUTER_API_KEY: ci-placeholder
+        run: pnpm exec prisma generate
+
+      - name: Type-check
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          AUTH_SECRET: ci-placeholder
+          AUTH_GOOGLE_ID: ci-placeholder
+          AUTH_GOOGLE_SECRET: ci-placeholder
+          OPENROUTER_API_KEY: ci-placeholder
+        run: pnpm typecheck
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          AUTH_SECRET: ci-placeholder
+          AUTH_GOOGLE_ID: ci-placeholder
+          AUTH_GOOGLE_SECRET: ci-placeholder
+          OPENROUTER_API_KEY: ci-placeholder
+        run: pnpm test

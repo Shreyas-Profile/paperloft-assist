@@ -85,7 +85,7 @@ async function downloadRef(
   return { bytes, mimeType, fileName: ref.file_name };
 }
 
-function guessMime(path: string): string {
+export function guessMime(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "oga" || ext === "ogg") return "audio/ogg";
   if (ext === "mp3") return "audio/mpeg";
@@ -152,7 +152,7 @@ export async function transcribeVoice(ref: TelegramFileRef): Promise<string> {
   return text;
 }
 
-function mimeTypeToAudioFormat(mimeType: string): string {
+export function mimeTypeToAudioFormat(mimeType: string): string {
   // OpenAI-compatible audio format tokens.
   if (mimeType.includes("ogg")) return "ogg";
   if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
