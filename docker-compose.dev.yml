@@ -1,0 +1,39 @@
+# Local-dev-only stack for paperloft-assist. Spins up JUST a Postgres
+# so you can point DATABASE_URL at localhost while running the Next.js
+# app on the host (`pnpm dev`). Nothing in this file is used in prod —
+# the real deploy uses docker-compose.yml which also builds the web
+# image.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d      # start pg
+#   DATABASE_URL=postgresql://admin:admin@localhost:5432/paperloft_assist \
+#     pnpm exec prisma db push
+#   pnpm dev
+#
+#   docker compose -f docker-compose.dev.yml down       # stop pg (data preserved)
+#   docker compose -f docker-compose.dev.yml down -v    # nuke pg + data
+
+services:
+  db:
+    container_name: paperloft-assist-db-dev
+    image: postgres:16
+    restart: unless-stopped
+    ports:
+      # Exposed on the host so the Next.js dev server (running outside
+      # docker) can connect. Prod compose doesn't do this because both
+      # the web container and db container are on the same docker network.
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: paperloft_assist
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d paperloft_assist"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata_dev:

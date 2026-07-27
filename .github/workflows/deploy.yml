@@ -1,0 +1,135 @@
+# CD half of paperloft-assist. Runs AFTER ci.yml passes on main.
+# rsyncs the working tree to Hetzner and rebuilds the docker container.
+# Post-deploy: curl the site; if it comes back non-2xx, roll back.
+#
+# Manual trigger (workflow_dispatch) also enabled — useful when you want
+# to redeploy the current tip without pushing a fresh commit, e.g. to
+# recover from a bad prod-only config change.
+#
+# Secrets required (already set — Settings → Secrets → Actions):
+#   HETZNER_SSH_KEY    — ed25519 private key added to root@37.27.193.248
+#   HETZNER_HOST       — 37.27.193.248
+#   HETZNER_USER       — root
+#
+# NOT deployed by this workflow: .env (kept only on Hetzner — never in
+# git, never in Actions logs), Docker volumes (userfiles, pgdata).
+
+name: Deploy
+
+on:
+  # Fire automatically after CI passes on main.
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  # Manual redeploy from the Actions tab.
+  workflow_dispatch:
+
+# Cancel a stale in-flight deploy if a newer one starts. Prevents two
+# rsyncs racing each other into the same directory.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: rsync + rebuild
+    runs-on: ubuntu-latest
+    # Only run if the upstream CI actually succeeded (workflow_run fires
+    # on completion regardless of conclusion).
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          # workflow_run doesn't tell us which SHA triggered CI — pin to
+          # main so we deploy whatever is currently on main.
+          ref: main
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Snapshot current running image (for rollback)
+        # Tag the currently-running image as :previous BEFORE we overwrite
+        # :latest. If deploy or health check fails we retag :previous back.
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} bash <<'REMOTE'
+            set -e
+            if docker image inspect paperloft-assist-web:latest >/dev/null 2>&1; then
+              docker tag paperloft-assist-web:latest paperloft-assist-web:previous
+              echo "snapshotted latest -> previous"
+            else
+              echo "no existing :latest image to snapshot (first deploy?)"
+            fi
+          REMOTE
+
+      - name: rsync source to Hetzner
+        # Excludes: local build artefacts, secrets, big data dirs, git
+        # metadata. --delete removes files on the remote that no longer
+        # exist locally so old code doesn't linger.
+        run: |
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude '.open-next' \
+            --exclude '.env' \
+            --exclude '.env.local' \
+            --exclude '.env.bak' \
+            --exclude 'dev.db*' \
+            --exclude 'tsconfig.tsbuildinfo' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:/opt/paperloft-assist/
+
+      - name: Rebuild + restart container
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} bash <<'REMOTE'
+            set -e
+            cd /opt/paperloft-assist
+            docker compose build web
+            docker compose up -d web
+            echo "waiting for container to come healthy..."
+            sleep 12
+            docker ps --filter name=paperloft-assist-web --format '{{.Names}}: {{.Status}}'
+          REMOTE
+
+      - name: Health check
+        # Curl the public URL twice with a small gap — cold Next.js
+        # requests can take a few seconds. Non-2xx = fail = rollback.
+        run: |
+          set -e
+          for i in 1 2 3; do
+            code=$(curl -sSL -o /dev/null -w '%{http_code}' https://paperloft.uk/ || echo "000")
+            echo "attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 6
+          done
+          echo "Health check failed after 3 attempts"
+          exit 1
+
+      - name: Rollback on failure
+        # Runs only if the health-check step above failed. Retags :previous
+        # back to :latest and restarts. If there was no previous image,
+        # this step still just restarts — better than leaving prod broken.
+        if: failure()
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} bash <<'REMOTE'
+            set -e
+            cd /opt/paperloft-assist
+            if docker image inspect paperloft-assist-web:previous >/dev/null 2>&1; then
+              echo "rolling back: retagging :previous -> :latest and restarting"
+              docker tag paperloft-assist-web:previous paperloft-assist-web:latest
+              docker compose up -d web
+              sleep 8
+              curl -sSL -o /dev/null -w 'rollback health check: HTTP %{http_code}\n' https://paperloft.uk/
+            else
+              echo "no :previous image available — leaving container as-is for manual triage"
+            fi
+          REMOTE
