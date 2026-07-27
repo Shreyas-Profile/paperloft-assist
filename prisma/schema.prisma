@@ -249,6 +249,37 @@ model TelegramPhoneMap {
   @@map("telegram_phone_map")
 }
 
+// Support tickets — the "change control" system. Public form on paperloft.uk
+// creates one of these; admin sees them on /admin/support; an AI triage pass
+// pre-fills category/priority/relevant files/draft-reply on submit so the
+// human review is faster. Human-in-the-loop is the whole point — no ticket
+// mutation happens without an admin clicking a button.
+model SupportTicket {
+  id              String   @id @default(cuid())
+  // Set to a monotonic per-ticket number for humans (#1, #2, ...).
+  // We derive it at insert time from a count(*) — fine at our scale;
+  // switch to a Postgres sequence if we ever cross 100k tickets.
+  ticketNumber    Int      @unique
+  submitterName   String
+  submitterEmail  String?
+  submitterUserId String?  // populated when the reporter is signed in
+  title           String
+  body            String   @db.Text
+  status          String   @default("open") // open | in_progress | done | wont_fix
+  priority        String   @default("unset") // p0 | p1 | p2 | p3 | unset
+  category        String   @default("unset") // bug | feature | question | other | unset
+  // Full LLM triage output — {category, priority, summary, suggestedFiles[], draftReply, notes}.
+  // Null until the async triage job runs. Stored raw so the admin page can
+  // show the model's reasoning without us re-deriving it.
+  aiTriage        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  resolvedAt      DateTime?
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("support_tickets")
+}
+
 // Short-lived OTP codes for WhatsApp / Telegram sign-in.
 // `identifier` = phone number (E.164) for BOTH providers. For Telegram we
 // look up the chatId via TelegramPhoneMap. Consumed once via
