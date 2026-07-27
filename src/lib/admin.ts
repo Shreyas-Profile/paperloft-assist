@@ -2,15 +2,19 @@
 // we add pricing gates for skills or usage limits, they'll check this first
 // and bypass for admins.
 //
-// Two entries for Shreyas:
-//   1. shreyas.pavuluri@gmail.com  — legacy Google sign-in identity
-//   2. +447404660489@phone.paperloft.local — WhatsApp sign-in synthetic
-//      identity (matches otp.ts.syntheticEmail("+447404660489"))
-// Both should get admin so he doesn't lose it when swapping sign-in method.
+// Three entries for Shreyas — one per sign-in path he uses. They're all
+// the same person; the app just stores whichever identity was in play
+// when the account was created.
+//   1. shreyas.pavuluri@gmail.com                — Google sign-in.
+//   2. +447404660489@phone.paperloft.local       — WhatsApp OTP (deprecated).
+//   3. tg-8639154947@telegram.paperloft.local    — Telegram Login Widget.
+// Adding a new sign-in path? Add the synthetic email format used by
+// events.signIn in src/lib/auth.ts.
 
 const ADMIN_EMAILS = new Set([
   "shreyas.pavuluri@gmail.com",
   "+447404660489@phone.paperloft.local",
+  "tg-8639154947@telegram.paperloft.local",
 ]);
 
 export function isAdmin(email: string | null | undefined): boolean {
