@@ -8,7 +8,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MessageSquare, Sparkles, Settings, LogOut, Menu, X } from "lucide-react";
+import {
+  MessageSquare,
+  Sparkles,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  LifeBuoy,
+  Inbox,
+} from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
@@ -23,9 +32,20 @@ const PRIMARY: NavItem[] = [
   { href: "/skills", label: "Skills", icon: Sparkles },
 ];
 
+// Bottom nav — "Support" is always visible so anyone hitting a bug
+// can find /support in one click from anywhere in the authed app.
+// "Tickets" (the /admin/support inbox) is added at render time for
+// admins only — see NavContent below.
 const BOTTOM: NavItem[] = [
+  { href: "/support", label: "Support", icon: LifeBuoy },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+
+const ADMIN_TICKETS_ITEM: NavItem = {
+  href: "/admin/support",
+  label: "Tickets",
+  icon: Inbox,
+};
 
 export function Sidebar({
   userName,
@@ -161,6 +181,12 @@ function NavContent({
         {BOTTOM.map((item) => (
           <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
         ))}
+        {isAdmin ? (
+          <NavLink
+            item={ADMIN_TICKETS_ITEM}
+            active={isActive(pathname, ADMIN_TICKETS_ITEM.href)}
+          />
+        ) : null}
 
         <div className="px-2 py-2 mt-2 flex items-center gap-2">
           {userImage ? (
