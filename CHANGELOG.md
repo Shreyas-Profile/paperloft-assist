@@ -5,8 +5,33 @@ Version numbers follow [Semantic Versioning](https://semver.org): `MAJOR.MINOR.P
 
 ## [Unreleased]
 
-### Added
-- **Test suite** — Vitest, first 28 regression tests (`pnpm test`).
+### Added — Round 4 (SDLC docs + operations)
+- **`/api/health` endpoint** — real DB + Telegram bot health probe. 503
+  when DB is down, 200 with detail otherwise. Pointable at UptimeRobot.
+- **`/status` public page** — human-readable ✅/⚠️/❌ badges per subsystem,
+  rendered server-side from /api/health.
+- **`/privacy` page + PRIVACY.md** — what we collect, why, retention,
+  deletion process. Public GDPR-ish policy suitable for handing to a
+  reviewer.
+- **RUNBOOK.md** — "at 2am something's broken" cheat-sheet: site down,
+  Telegram silent, reminders not firing, disk full, deploy shipped bad
+  code, key rotation.
+- **docs/architecture.md** — one-page system diagram (Mermaid) + component
+  descriptions + request-path walkthroughs + "when each piece would
+  need to change" table.
+- **docs/adr/** — 5 architecture decision records: Telegram-first
+  delivery, Hetzner+Docker choice, Postgres+Prisma pin, OpenRouter
+  routing, Nova reminders fork.
+- **docs/branching.md** + **CONTRIBUTING.md** + **`.github/PULL_REQUEST_TEMPLATE.md`** —
+  formalised the feature-branch + PR workflow that this round is the
+  first to use.
+- **docs/api.md** — every /api/* route documented (purpose, auth,
+  request, response, examples).
+- **Landing footer links** — `/status`, `/support`, `/privacy` added.
+- **`foldStatus` regression tests** — pins the subsystem rollup rules.
+
+### Added — Round 1-3 (from earlier)
+- **Test suite** — Vitest, 36 tests total (`pnpm test`).
 - **CI** — GitHub Actions runs type-check + tests on every push and PR.
 - **`typecheck` script** — `pnpm typecheck` runs `tsc --noEmit`.
 
