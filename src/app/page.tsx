@@ -318,10 +318,19 @@ function Footer() {
           <span className="font-medium text-foreground">Paperloft Assist</span>
           <span>· by Shreyas Pavuluri</span>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-5 flex-wrap justify-center">
           <a href={`mailto:${OWNER_EMAIL}`} className="hover:text-foreground transition">
             Email
           </a>
+          <Link href="/status" className="hover:text-foreground transition">
+            Status
+          </Link>
+          <Link href="/support" className="hover:text-foreground transition">
+            Support
+          </Link>
+          <Link href="/privacy" className="hover:text-foreground transition">
+            Privacy
+          </Link>
           <Link href="/signin?callbackUrl=/chat" className="hover:text-foreground transition">
             Log in
           </Link>
