@@ -9,6 +9,7 @@ import { makeBrowserSkills } from "../hosted-browser";
 import { makeCronSkills } from "../hosted-cron";
 import { makeDocsSkills } from "../hosted-docs";
 import { makeTorSkills } from "../hosted-tor";
+import { makeVideoRenderSkills } from "../hosted-video-render";
 
 // Provider-agnostic base skills (no per-user context needed).
 export const skills = {
@@ -29,5 +30,6 @@ export function makeUserScopedSkills(userEmail: string) {
     ...makeCronSkills(userEmail),
     ...makeDocsSkills(userEmail),
     ...makeTorSkills(userEmail),
+    ...makeVideoRenderSkills(userEmail),
   } as const;
 }

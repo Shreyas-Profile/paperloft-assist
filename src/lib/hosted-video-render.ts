@@ -1,0 +1,180 @@
+// Paperloft-side wrapper around globalion/video-render-mcp.
+//
+// Same shared-service-key pattern as hosted-cron.ts (not hosted-docs's
+// per-user provisioning). All paperloft users share one video-render-mcp
+// account — jobs are tagged with metadata.userEmail so we can attribute
+// usage on our side. video-render doesn't yet expose an
+// /api/platform/provision-user endpoint, so per-user isolation would
+// require modifying that codebase.
+//
+// video-render jobs are async (60-300s render time). The tool returns
+// a jobId + videoUrl immediately and the LLM tells the user "check
+// back in a few minutes at <url>". No polling inside the chat turn —
+// that would burn STEP_CAP for nothing.
+
+import { tool } from "ai";
+import { z } from "zod";
+
+const VIDEO_RENDER_MCP_URL =
+  process.env.VIDEO_RENDER_MCP_URL ?? "https://video-render.regiq.in/api/mcp";
+const VIDEO_RENDER_MCP_KEY = process.env.VIDEO_RENDER_MCP_KEY;
+
+interface McpEnvelope<T> {
+  jsonrpc: "2.0";
+  id: number;
+  result?: T;
+  error?: { code: number; message: string };
+}
+
+interface McpToolResult {
+  content?: Array<{ type: string; text?: string }>;
+  structuredContent?: unknown;
+  isError?: boolean;
+}
+
+async function rpc<T>(method: string, params?: unknown): Promise<T> {
+  if (!VIDEO_RENDER_MCP_KEY) {
+    throw new Error("VIDEO_RENDER_MCP_KEY not set on paperloft server");
+  }
+  const res = await fetch(VIDEO_RENDER_MCP_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      Authorization: `Bearer ${VIDEO_RENDER_MCP_KEY}`,
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const json = (await res.json()) as McpEnvelope<T>;
+  if (json.error) throw new Error(`video-render ${method}: ${json.error.message}`);
+  if (!json.result) throw new Error(`video-render ${method}: no result`);
+  return json.result;
+}
+
+async function callVideoTool(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const r = await rpc<McpToolResult>("tools/call", { name, arguments: args });
+  if (r.isError) {
+    const msg = r.content?.[0]?.text ?? "unknown video-render error";
+    throw new Error(msg);
+  }
+  return r.structuredContent ?? r.content?.[0]?.text;
+}
+
+// Scene schema — kept intentionally loose (z.any() per scene) so we don't
+// have to mirror + re-validate video-render's evolving ScenePlan schema
+// here. Upstream validates the actual shape; if the LLM passes a bad
+// scene, upstream returns a helpful error which we propagate.
+const sceneSchema = z
+  .record(z.string(), z.unknown())
+  .describe(
+    "One scene. Required field 'type' ∈ 'title'|'stat'|'image'|'code'|'cta'. " +
+      "Fields vary per type — see video_plan output for exact shapes.",
+  );
+
+/**
+ * Two-tool set:
+ *   • video_plan — draft a scene plan without rendering (cheap, no credits)
+ *   • video_render — actually render an MP4 (async, ~60-300s, costs credits)
+ *
+ * Typical LLM flow: plan → confirm with user → render → tell them the URL.
+ */
+export function makeVideoRenderSkills(userEmail: string) {
+  return {
+    video_plan: tool({
+      description:
+        "Draft a video ScenePlan without rendering. Zero credits — use this to iterate on the concept with the user before spending on a real render. Returns the same object shape video_render accepts. Sizing rule: script text ≈ 150 words per minute × targetDurationSec.",
+      inputSchema: z.object({
+        title: z.string().min(1).max(200),
+        targetDurationSec: z.number().int().min(5).max(180).default(30),
+        script: z
+          .string()
+          .describe(
+            "Full narration text. Should read for approximately targetDurationSec at 150 wpm.",
+          ),
+        scenes: z.array(sceneSchema).min(1).max(12),
+        voice: z
+          .enum([
+            "male-uk",
+            "female-uk",
+            "male-us",
+            "female-us",
+            "premium-male-uk",
+            "premium-female-uk",
+            "premium-male-us",
+            "premium-female-us",
+          ])
+          .optional()
+          .default("male-uk"),
+      }),
+      execute: async (args) => callVideoTool("plan_video_scenes", args),
+    }),
+
+    video_render: tool({
+      description:
+        "Kick off an ASYNC video render. Returns { jobId, statusUrl, videoUrl, creditsQuoted } immediately — the actual render takes 60-300 seconds. Do NOT poll from here (it eats step budget); instead tell the user 'your video will be ready at <videoUrl> in a few minutes' and stop. If they ask later, call video_status({ jobId }) to check.",
+      inputSchema: z.object({
+        title: z.string().min(1).max(200),
+        targetDurationSec: z.number().int().min(5).max(180).default(30),
+        script: z.string(),
+        scenes: z.array(sceneSchema).min(1).max(12),
+        voice: z
+          .enum([
+            "male-uk",
+            "female-uk",
+            "male-us",
+            "female-us",
+            "premium-male-uk",
+            "premium-female-uk",
+            "premium-male-us",
+            "premium-female-us",
+          ])
+          .optional()
+          .default("male-uk"),
+      }),
+      execute: async (args) => {
+        // Tag every job with userEmail metadata so we can attribute usage
+        // when we look back at the shared video-render account.
+        const result = (await callVideoTool("render_video", {
+          ...args,
+          metadata: { userEmail },
+        })) as {
+          jobId: string;
+          statusUrl?: string;
+          videoUrl?: string;
+          creditsQuoted?: number;
+          creditsRemaining?: number;
+        };
+        return result;
+      },
+    }),
+
+    video_status: tool({
+      description:
+        "Check whether an in-flight video render has finished. Returns { status: 'pending'|'rendering'|'success'|'failed', videoUrl?, durationSec?, sizeBytes? }. Call this ONLY when the user asks 'is my video ready?' — don't poll speculatively.",
+      inputSchema: z.object({
+        jobId: z.string(),
+      }),
+      execute: async ({ jobId }) => {
+        if (!VIDEO_RENDER_MCP_KEY) {
+          throw new Error("VIDEO_RENDER_MCP_KEY not set on paperloft server");
+        }
+        const res = await fetch(
+          `https://video-render.regiq.in/api/jobs/${encodeURIComponent(jobId)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${VIDEO_RENDER_MCP_KEY}`,
+              Accept: "application/json",
+            },
+          },
+        );
+        if (!res.ok) {
+          throw new Error(`video-render status: HTTP ${res.status}`);
+        }
+        return (await res.json()) as Record<string, unknown>;
+      },
+    }),
+  };
+}
