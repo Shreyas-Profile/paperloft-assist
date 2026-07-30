@@ -55,9 +55,17 @@ async function callVideoTool(
   name: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
+  // Debug: log the payload we're sending so we can see what shape the
+  // LLM actually built when tool calls fail upstream. Remove once video-
+  // render is stable in prod (leaves are noisy).
+  try {
+    const preview = JSON.stringify(args).slice(0, 800);
+    console.log(`[hosted-video-render] → ${name}: ${preview}`);
+  } catch {}
   const r = await rpc<McpToolResult>("tools/call", { name, arguments: args });
   if (r.isError) {
     const msg = r.content?.[0]?.text ?? "unknown video-render error";
+    console.warn(`[hosted-video-render] ← ${name} ERROR: ${msg.slice(0, 400)}`);
     throw new Error(msg);
   }
   return r.structuredContent ?? r.content?.[0]?.text;
