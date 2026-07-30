@@ -11,7 +11,11 @@
 export const SKILL_TOOLS: Record<string, string[]> = {
   // Hosted MCPs — remote-tool wiring hasn't shipped yet, so enabling these
   // records the toggle but doesn't add tools to the LLM's toolbelt.
-  video_render_mcp: [],
+  // video-render-mcp — Fireship-style motion-graphics videos from a
+  // ScenePlan. Uses a shared paperloft-service key (VIDEO_RENDER_MCP_KEY)
+  // rather than per-user provisioning (upstream has no /provision-user
+  // endpoint yet). Jobs are tagged with metadata.userEmail for accounting.
+  video_render_mcp: ["video_plan", "video_render", "video_status"],
   // Docs (docs-mcp) — vector RAG over any uploaded document. Toggling this
   // on provisions a sub-account on docs.regiq.in via /api/platform/provision-user
   // and stores the key in SkillConnection. Every tool call routes through
