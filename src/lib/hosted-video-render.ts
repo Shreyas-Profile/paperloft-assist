@@ -63,16 +63,33 @@ async function callVideoTool(
   return r.structuredContent ?? r.content?.[0]?.text;
 }
 
-// Scene schema — kept intentionally loose (z.any() per scene) so we don't
-// have to mirror + re-validate video-render's evolving ScenePlan schema
-// here. Upstream validates the actual shape; if the LLM passes a bad
-// scene, upstream returns a helpful error which we propagate.
+// Scene schema — kept loose (untyped object per scene) so we don't have to
+// mirror video-render's evolving ScenePlan schema here. Upstream validates
+// the actual shape; if the LLM passes a bad scene it gets a Zod error we
+// re-throw. The tool descriptions below spell out the exact fields per
+// scene type so the LLM doesn't have to guess.
 const sceneSchema = z
   .record(z.string(), z.unknown())
   .describe(
-    "One scene. Required field 'type' ∈ 'title'|'stat'|'image'|'code'|'cta'. " +
-      "Fields vary per type — see video_plan output for exact shapes.",
+    "One scene object. See tool description for exact shape by 'type'.",
   );
+
+// Reused by both video_plan and video_render descriptions so they stay in
+// sync. Concrete example is worth more than any schema docs.
+const SCENE_SHAPES_HINT =
+  "\n\nSCENE SHAPES (exact field names — get these wrong and the call fails):\n" +
+  "  • title: { type:'title', copy:'HEADLINE', subtitle?:'OPTIONAL SUB' }\n" +
+  "  • stat:  { type:'stat', big:'BIG WORD', small:'small caption', image?:'data:image/…' }\n" +
+  "  • image: { type:'image', src:'https://… OR data:image/…', caption?:'text', fit?:'cover'|'contain', background?:'#0f172a' }\n" +
+  "  • code:  { type:'code', language:'ts', snippet:'const x = 1;', caption?:'text' }\n" +
+  "  • cta:   { type:'cta', url:'paperloft.uk', copy:'Try it free.' }\n\n" +
+  "EXAMPLE full ScenePlan for a 20s intro video:\n" +
+  '  { title:"Hello world demo", targetDurationSec:20, voice:"male-uk",\n' +
+  '    script:"Hello world. This is a Paperloft demo. Try it at paperloft dot uk.",\n' +
+  '    scenes:[\n' +
+  '      {type:"title", copy:"Hello, world", subtitle:"A tiny demo"},\n' +
+  '      {type:"cta", url:"paperloft.uk", copy:"Try it free."}\n' +
+  '    ] }';
 
 /**
  * Two-tool set:
@@ -85,7 +102,8 @@ export function makeVideoRenderSkills(userEmail: string) {
   return {
     video_plan: tool({
       description:
-        "Draft a video ScenePlan without rendering. Zero credits — use this to iterate on the concept with the user before spending on a real render. Returns the same object shape video_render accepts. Sizing rule: script text ≈ 150 words per minute × targetDurationSec.",
+        "Draft a video ScenePlan without rendering. Zero credits — use this to iterate on the concept with the user before spending on a real render. Returns the same object shape video_render accepts. Sizing rule: script text ≈ 150 words per minute × targetDurationSec." +
+        SCENE_SHAPES_HINT,
       inputSchema: z.object({
         title: z.string().min(1).max(200),
         targetDurationSec: z.number().int().min(5).max(180).default(30),
@@ -114,7 +132,8 @@ export function makeVideoRenderSkills(userEmail: string) {
 
     video_render: tool({
       description:
-        "Kick off an ASYNC video render. Returns { jobId, statusUrl, videoUrl, creditsQuoted } immediately — the actual render takes 60-300 seconds. Do NOT poll from here (it eats step budget); instead tell the user 'your video will be ready at <videoUrl> in a few minutes' and stop. If they ask later, call video_status({ jobId }) to check.",
+        "Kick off an ASYNC video render. Returns { jobId, statusUrl, videoUrl, creditsQuoted } immediately — the actual render takes 60-300 seconds. Do NOT poll from here (it eats step budget); instead tell the user 'your video will be ready at <videoUrl> in a few minutes' and stop. If they ask later, call video_status({ jobId }) to check." +
+        SCENE_SHAPES_HINT,
       inputSchema: z.object({
         title: z.string().min(1).max(200),
         targetDurationSec: z.number().int().min(5).max(180).default(30),
