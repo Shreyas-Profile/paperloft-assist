@@ -52,17 +52,16 @@ export interface WhatsAppMessage {
 }
 
 // Ack shortcuts — match these first, before the LLM turn, so a plain
-// "ack" / "done" / "taken" / "snooze 10" reply just works without the
-// model needing to know instance IDs.
+// "ack" / "done" / "taken" reply just works without the model needing
+// to know instance IDs. Snooze is intentionally not supported — if the
+// user wants to postpone, they can ask the assistant to create a new
+// reminder for the later time.
 const ACK_PATTERNS: Array<{
   re: RegExp;
-  state: "acked" | "skipped" | "snoozed";
-  snoozeIndex?: number;
+  state: "acked" | "skipped";
 }> = [
   { re: /^(ack|done|taken|✅|👍|ok|okay|got it)$/i, state: "acked" },
   { re: /^(skip|skipped)$/i, state: "skipped" },
-  { re: /^snooze\s+(\d+)$/i, state: "snoozed", snoozeIndex: 1 },
-  { re: /^snooze$/i, state: "snoozed" }, // default 10 min
 ];
 
 async function tryAckShortcut(
@@ -70,14 +69,10 @@ async function tryAckShortcut(
   text: string,
 ): Promise<string | null> {
   const trimmed = text.trim();
-  let matchedState: "acked" | "skipped" | "snoozed" | null = null;
-  let snoozeMinutes: number | undefined;
+  let matchedState: "acked" | "skipped" | null = null;
   for (const p of ACK_PATTERNS) {
-    const m = p.re.exec(trimmed);
-    if (m) {
+    if (p.re.exec(trimmed)) {
       matchedState = p.state;
-      if (p.snoozeIndex !== undefined) snoozeMinutes = Number(m[p.snoozeIndex]);
-      else if (p.state === "snoozed") snoozeMinutes = 10;
       break;
     }
   }
@@ -87,49 +82,23 @@ async function tryAckShortcut(
   const instance = await prisma.reminderInstance.findFirst({
     where: { userId: userEmail, ackState: "pending" },
     orderBy: { firedAt: "desc" },
-    select: { id: true, reminderId: true },
+    select: { id: true },
   });
   if (!instance) {
     return "No pending reminder to ack right now. Next one that fires, just reply here and I'll log it.";
   }
 
-  const updates: {
-    ackState: "acked" | "skipped" | "snoozed";
-    ackAt: Date;
-    ackButtonId: string;
-    snoozedToInstanceId?: string;
-  } = {
-    ackState: matchedState,
-    ackAt: new Date(),
-    ackButtonId: matchedState === "snoozed" ? `snooze:${snoozeMinutes ?? 10}` : matchedState,
-  };
-
-  if (matchedState === "snoozed") {
-    // Create a child ReminderInstance at now + N minutes. The scheduler's
-    // fire loop finds pending instances by (reminderId, scheduledFor) — this
-    // one has no firedAt yet, so the next tick will fire it and the ack
-    // buttons will render again for the fresh instance.
-    const minutes = snoozeMinutes ?? 10;
-    const newDue = new Date(Date.now() + minutes * 60_000);
-    const child = await prisma.reminderInstance.create({
-      data: {
-        reminderId: instance.reminderId,
-        userId: userEmail,
-        scheduledFor: newDue,
-        ackState: "pending",
-      },
-    });
-    updates.snoozedToInstanceId = child.id;
-  }
-
   await prisma.reminderInstance.update({
     where: { id: instance.id },
-    data: updates,
+    data: {
+      ackState: matchedState,
+      ackAt: new Date(),
+      ackButtonId: matchedState,
+    },
   });
 
   if (matchedState === "acked") return "✅ Logged. Nice work.";
-  if (matchedState === "skipped") return "⏭️ Skipped. No worries.";
-  return `⏰ Snoozed for ${snoozeMinutes ?? 10} min. I'll ping you again then.`;
+  return "⏭️ Skipped. No worries.";
 }
 
 /**

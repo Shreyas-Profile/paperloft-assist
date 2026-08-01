@@ -127,59 +127,6 @@ export async function tick(
     }
   }
 
-  // 1b. Fire snooze-child instances — created by handleInbound() or by the
-  //     WhatsApp/Telegram ack-shortcut with a `scheduledFor` in the future
-  //     that has now arrived. These are NOT tied to the parent reminder's
-  //     current dueAt (which is the NEXT-after-snooze slot), so section 1
-  //     above misses them.
-  const dueSnoozed = (await prisma.reminderInstance.findMany({
-    where: {
-      firedAt: null,
-      ackState: "pending",
-      scheduledFor: { lte: now() },
-      // Exclude ones the section-1 pass already handled by looking at rows
-      // whose parent reminder.dueAt is strictly LATER than this instance's
-      // scheduledFor — meaning the instance was created out-of-band.
-    },
-    include: { reminder: true },
-    orderBy: { scheduledFor: "asc" },
-    take: 200,
-  })) as unknown as Array<ReminderInstance & { reminder: Reminder }>;
-
-  for (const inst of dueSnoozed) {
-    if (inst.firedAt) continue; // race with section 1
-    const r = inst.reminder;
-    if (!r) continue;
-    // Only fire if the parent reminder is still active. Cancelled/sent
-    // parents should not fire snoozed children.
-    if (r.status !== "pending" && r.status !== "sent") continue;
-
-    const userCtx = makeCtx(r.userId);
-    const pref = await prisma.userChannelPref.findUnique({
-      where: { userId: r.userId },
-    });
-    const channels: Array<"telegram" | "whatsapp"> = pref
-      ? [pref.defaultChannel as "telegram" | "whatsapp"].concat(
-          pref.fallbackChannel ? [pref.fallbackChannel as "telegram" | "whatsapp"] : [],
-        )
-      : ["telegram"];
-
-    const env = buildEnvelope(r, inst, channels);
-    try {
-      await userCtx.callbacks.onFire(env);
-      await prisma.reminderInstance.update({
-        where: { id: inst.id },
-        data: { firedAt: now(), channels },
-      });
-      fired++;
-    } catch (e) {
-      console.warn(
-        `[nova-reminders] snoozed-child onFire failed for inst ${inst.id}:`,
-        (e as Error).message,
-      );
-    }
-  }
-
   // 2. Escalation — resend once for pending instances past their window.
   //    We only touch reminders with escalateAfterMin > 0.
   const escalatable = (await prisma.reminderInstance.findMany({

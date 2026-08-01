@@ -10,11 +10,10 @@ import type { SkillContext } from "../context";
 export function reminderAck(ctx: SkillContext) {
   return tool({
     description:
-      "Acknowledge a reminder instance. `state` is 'acked' (taken/done), 'skipped', or 'snoozed'. Only pass `snoozeMinutes` when state='snoozed'. The `instanceId` identifies a specific firing — get it from the button press or by looking up the latest pending instance for a reminder.",
+      "Acknowledge a reminder instance. `state` is 'acked' (taken/done) or 'skipped'. The `instanceId` identifies a specific firing — get it from the button press or by looking up the latest pending instance for a reminder. Snooze is intentionally not supported: if the user asks to postpone, offer to create a new reminder for the later time instead.",
     inputSchema: z.object({
       instanceId: z.string(),
-      state: z.enum(["acked", "skipped", "snoozed"]),
-      snoozeMinutes: z.number().int().positive().optional(),
+      state: z.enum(["acked", "skipped"]),
       buttonId: z.string().optional(),
     }),
     execute: async (input) => {
@@ -24,29 +23,6 @@ export function reminderAck(ctx: SkillContext) {
       if (!inst) return { error: "Instance not found" };
       if (inst.ackState !== "pending") {
         return { alreadyAcked: true, state: inst.ackState };
-      }
-
-      if (input.state === "snoozed") {
-        const minutes = input.snoozeMinutes ?? 10;
-        const newDue = new Date(Date.now() + minutes * 60_000);
-        const child = await ctx.prisma.reminderInstance.create({
-          data: {
-            reminderId: inst.reminderId,
-            userId: inst.userId,
-            scheduledFor: newDue,
-            ackState: "pending",
-          },
-        });
-        await ctx.prisma.reminderInstance.update({
-          where: { id: inst.id },
-          data: {
-            ackState: "snoozed",
-            ackButtonId: input.buttonId ?? `snooze:${minutes}`,
-            ackAt: new Date(),
-            snoozedToInstanceId: child.id,
-          },
-        });
-        return { snoozedUntil: newDue.toISOString(), newInstanceId: child.id };
       }
 
       await ctx.prisma.reminderInstance.update({

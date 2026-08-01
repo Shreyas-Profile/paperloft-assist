@@ -92,9 +92,15 @@ everything", "remove them all", "cancel every reminder I have"):
   (the tool returns { cancelled: N }). Don't ask "shall I try again?"
   unless the tool actually returned an error.
 
-Medication defaults: type="medication", Taken/+10min/Skip ack buttons.
+Medication defaults: type="medication", Taken/Skip ack buttons.
 Appointment defaults: type="appointment", Confirmed/Reschedule buttons.
 General defaults: type="general", no ack buttons unless user asks.
+
+Snooze is intentionally NOT supported. If a user asks to "snooze this
+reminder for 10 min", DO NOT try to snooze — instead offer to create a
+new one-shot reminder for 10 minutes from now, and if they agree, call
+reminder_create with dueAt = now + 10 min. Do NOT reference an old fire
+by instance id — those go stale fast.
 
 Prescriptions: ALWAYS show the preview from prescription_ingest and let the
 user approve before calling prescription_confirm. Never fabricate meds,
@@ -105,7 +111,7 @@ via reminder_create. Confirm the total count at the end, only after all
 successful tool calls.
 
 Users can talk in natural language: "move my BP med to 9am", "stop the
-weekly one", "snooze this by an hour" — parse and call the right tool.`;
+weekly one", "remind me in an hour" — parse and call the right tool.`;
 
 /**
  * Build the skill for one acting user + one host request.
@@ -150,31 +156,10 @@ export async function handleInbound(
 ): Promise<{ handled: boolean; result?: unknown }> {
   if (event.buttonPress) {
     const { instanceId, buttonId } = event.buttonPress;
+    // Snooze is not offered anymore; ignore any legacy snooze taps that
+    // arrive from historical fires.
     if (buttonId.startsWith("snooze:")) {
-      const minutes = parseInt(buttonId.split(":")[1], 10) || 10;
-      const inst = await ctx.prisma.reminderInstance.findFirst({
-        where: { id: instanceId, userId: ctx.userId },
-      });
-      if (!inst || inst.ackState !== "pending") return { handled: true, result: { alreadyAcked: true } };
-      const newDue = new Date(Date.now() + minutes * 60_000);
-      const child = await ctx.prisma.reminderInstance.create({
-        data: {
-          reminderId: inst.reminderId,
-          userId: inst.userId,
-          scheduledFor: newDue,
-          ackState: "pending",
-        },
-      });
-      await ctx.prisma.reminderInstance.update({
-        where: { id: inst.id },
-        data: {
-          ackState: "snoozed",
-          ackButtonId: buttonId,
-          ackAt: new Date(),
-          snoozedToInstanceId: child.id,
-        },
-      });
-      return { handled: true, result: { snoozedUntil: newDue.toISOString() } };
+      return { handled: false };
     }
 
     const state = buttonMap(buttonId);

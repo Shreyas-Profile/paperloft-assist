@@ -174,7 +174,7 @@ export function prescriptionConfirm(ctx: SkillContext) {
               recurrence: serializeRecurrence("daily"),
               recurrenceEnd: recEnd,
               ackMode: "tap",
-              snoozeOffer: [10],
+              snoozeOffer: [],
               escalateAfterMin: 10,
               prescriptionId: p.id,
               metadata: { fromPrescription: p.id, frequency: m.frequency },

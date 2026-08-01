@@ -20,7 +20,7 @@ export function reminderCreate(ctx: SkillContext) {
       "  • Fixed: none | hourly | daily | weekdays | weekly | monthly | quarterly | yearly\n" +
       "  • Interval: every:<N>m (N>=5) or every:<N>h (N>=1) — e.g. every:15m, every:2h\n" +
       "  • Weekly by day: weekly:<days> — e.g. weekly:wed (single day) or weekly:mon,wed,fri (multiple)\n" +
-      "Medication reminders get Taken/+10 min/Skip buttons by default and require ack; general reminders are silent unless ackMode='tap'.",
+      "Medication reminders get Taken/Skip buttons by default and require ack; general reminders are silent unless ackMode='tap'. Snooze is intentionally not offered — if a user wants to postpone, create a new reminder for the later time.",
     inputSchema: z.object({
       title: z.string().min(1).max(200),
       dueAt: z.string().describe("ISO 8601 datetime"),
@@ -29,7 +29,6 @@ export function reminderCreate(ctx: SkillContext) {
       recurrence: recurrenceSchema.optional(),
       recurrenceEnd: z.string().optional(),
       ackMode: ackModeEnum.optional(),
-      snoozeMinutes: z.array(z.number().int().positive()).optional(),
       escalateAfterMin: z.number().int().min(0).optional(),
       prescriptionId: z.string().optional(),
     }),
@@ -50,9 +49,6 @@ export function reminderCreate(ctx: SkillContext) {
       const defaultAck =
         type === "medication" ? "tap" : type === "appointment" ? "tap" : "none";
       const ackMode = input.ackMode ?? defaultAck;
-      const defaultSnooze =
-        type === "medication" ? [10] : type === "appointment" ? [] : [];
-      const snooze = input.snoozeMinutes ?? defaultSnooze;
       const escalate =
         input.escalateAfterMin ?? (type === "medication" ? 10 : 0);
 
@@ -66,7 +62,7 @@ export function reminderCreate(ctx: SkillContext) {
           recurrence: input.recurrence ?? "none",
           recurrenceEnd: input.recurrenceEnd ? new Date(input.recurrenceEnd) : null,
           ackMode,
-          snoozeOffer: snooze,
+          snoozeOffer: [],
           escalateAfterMin: escalate,
           prescriptionId: input.prescriptionId ?? null,
         },
@@ -160,7 +156,6 @@ export function reminderUpdate(ctx: SkillContext) {
       recurrence: recurrenceSchema.optional(),
       recurrenceEnd: z.string().nullable().optional(),
       ackMode: ackModeEnum.optional(),
-      snoozeMinutes: z.array(z.number().int().positive()).optional(),
     }),
     execute: async (input) => {
       const data: Record<string, unknown> = {};
@@ -176,7 +171,6 @@ export function reminderUpdate(ctx: SkillContext) {
           : null;
       }
       if (input.ackMode !== undefined) data.ackMode = input.ackMode;
-      if (input.snoozeMinutes !== undefined) data.snoozeOffer = input.snoozeMinutes;
 
       const r = await ctx.prisma.reminder.updateMany({
         where: { id: input.id, userId: ctx.userId },
