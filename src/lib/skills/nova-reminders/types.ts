@@ -17,7 +17,10 @@ export type Recurrence =
   | "weekdays"
   | "weekly"
   | "monthly"
+  | "quarterly"
   | "yearly"
+  | `every:${number}${"m" | "h"}`
+  | `weekly:${string}`
   | { cron: string };
 
 /** How much interaction we ask for on each fire. */

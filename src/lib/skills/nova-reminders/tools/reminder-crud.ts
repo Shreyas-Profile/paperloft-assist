@@ -1,17 +1,14 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { SkillContext } from "../context";
-import { serializeRecurrence } from "../recurrence";
+import { isValidRecurrence } from "../recurrence";
 
-const recurrenceEnum = z.enum([
-  "none",
-  "hourly",
-  "daily",
-  "weekdays",
-  "weekly",
-  "monthly",
-  "yearly",
-]);
+const recurrenceSchema = z
+  .string()
+  .refine((s) => isValidRecurrence(s), {
+    message:
+      "recurrence must be one of: none, hourly, daily, weekdays, weekly, monthly, quarterly, yearly, every:<N>m (N>=5), every:<N>h (N>=1), or weekly:<mon,tue,wed,thu,fri,sat,sun>",
+  });
 
 const reminderTypeEnum = z.enum(["general", "medication", "appointment"]);
 const ackModeEnum = z.enum(["none", "tap", "reply"]);
@@ -19,13 +16,17 @@ const ackModeEnum = z.enum(["none", "tap", "reply"]);
 export function reminderCreate(ctx: SkillContext) {
   return tool({
     description:
-      "Create a reminder. `type` defaults to 'general'; use 'medication' for pill/dose reminders and 'appointment' for one-shot visits. `dueAt` is ISO 8601. Set `recurrence` for repeating reminders. Medication reminders get Taken/Snooze/Skip buttons by default; general reminders are silent unless `ackMode` is set to 'tap'.",
+      "Create a reminder. `type` defaults to 'general'; use 'medication' for pill/dose reminders and 'appointment' for one-shot visits. `dueAt` is ISO 8601 UTC. Set `recurrence` for repeating reminders:\n" +
+      "  • Fixed: none | hourly | daily | weekdays | weekly | monthly | quarterly | yearly\n" +
+      "  • Interval: every:<N>m (N>=5) or every:<N>h (N>=1) — e.g. every:15m, every:2h\n" +
+      "  • Weekly by day: weekly:<days> — e.g. weekly:wed (single day) or weekly:mon,wed,fri (multiple)\n" +
+      "Medication reminders get Taken/+10 min/Skip buttons by default and require ack; general reminders are silent unless ackMode='tap'.",
     inputSchema: z.object({
       title: z.string().min(1).max(200),
       dueAt: z.string().describe("ISO 8601 datetime"),
       description: z.string().optional(),
       type: reminderTypeEnum.optional(),
-      recurrence: recurrenceEnum.optional(),
+      recurrence: recurrenceSchema.optional(),
       recurrenceEnd: z.string().optional(),
       ackMode: ackModeEnum.optional(),
       snoozeMinutes: z.array(z.number().int().positive()).optional(),
@@ -42,15 +43,6 @@ export function reminderCreate(ctx: SkillContext) {
       if (activeCount >= 200) {
         throw new Error(
           `You already have ${activeCount} active reminders (limit 200). Delete or cancel some first, then try again.`,
-        );
-      }
-
-      // Minimum recurrence 1 minute — hourly and above are safe by definition.
-      // We only need to guard against the (rare) cron:<expr> case where the
-      // agent might supply an interval faster than a minute.
-      if (input.recurrence && !["none", "hourly", "daily", "weekdays", "weekly", "monthly", "yearly"].includes(input.recurrence)) {
-        throw new Error(
-          `unsupported recurrence "${input.recurrence}". Use one of: none, hourly, daily, weekdays, weekly, monthly, yearly.`,
         );
       }
 
@@ -71,7 +63,7 @@ export function reminderCreate(ctx: SkillContext) {
           title: input.title,
           description: input.description ?? null,
           dueAt: new Date(input.dueAt),
-          recurrence: serializeRecurrence(input.recurrence ?? "none"),
+          recurrence: input.recurrence ?? "none",
           recurrenceEnd: input.recurrenceEnd ? new Date(input.recurrenceEnd) : null,
           ackMode,
           snoozeOffer: snooze,
@@ -165,7 +157,7 @@ export function reminderUpdate(ctx: SkillContext) {
       title: z.string().optional(),
       dueAt: z.string().optional(),
       description: z.string().optional(),
-      recurrence: recurrenceEnum.optional(),
+      recurrence: recurrenceSchema.optional(),
       recurrenceEnd: z.string().nullable().optional(),
       ackMode: ackModeEnum.optional(),
       snoozeMinutes: z.array(z.number().int().positive()).optional(),
@@ -176,7 +168,7 @@ export function reminderUpdate(ctx: SkillContext) {
       if (input.dueAt !== undefined) data.dueAt = new Date(input.dueAt);
       if (input.description !== undefined) data.description = input.description;
       if (input.recurrence !== undefined) {
-        data.recurrence = serializeRecurrence(input.recurrence);
+        data.recurrence = input.recurrence;
       }
       if (input.recurrenceEnd !== undefined) {
         data.recurrenceEnd = input.recurrenceEnd
@@ -213,7 +205,7 @@ export function reminderDelete(ctx: SkillContext) {
 export function reminderDeleteMany(ctx: SkillContext) {
   return tool({
     description:
-      "Bulk-cancel reminders in a single call. Prefer this over looping reminder_delete when the user asks to remove multiple at once ('delete all my reminders', 'clear the medication ones'). Two modes: pass `ids` for a specific list, OR pass a filter (`status` and/or `type`) to cancel every matching reminder. Returns the count of reminders cancelled.",
+      "Bulk-cancel reminders in a single call. Prefer this over looping reminder_delete when the user asks to remove multiple at once ('delete all my reminders', 'clear the medication ones'). Two modes: pass `ids` for a specific list, OR pass a filter (`status` and/or `type`) to cancel every matching reminder. Returns `{ cancelled: N, reminders: [{id,title}...] }` so you can confirm to the user exactly which ones were removed.",
     inputSchema: z
       .object({
         ids: z
@@ -252,11 +244,23 @@ export function reminderDeleteMany(ctx: SkillContext) {
       // Only cancel reminders that aren't already cancelled — avoids
       // "cancelled 30 reminders" when 25 were already dead.
       where.status = where.status ?? { not: "cancelled" };
+
+      // Snapshot the matched rows FIRST so we can return their titles.
+      // Bounded at 50 to keep the tool-result payload small.
+      const targets = await ctx.prisma.reminder.findMany({
+        where,
+        select: { id: true, title: true },
+        take: 50,
+      });
       const r = await ctx.prisma.reminder.updateMany({
         where,
         data: { status: "cancelled" },
       });
-      return { cancelled: r.count };
+      return {
+        cancelled: r.count,
+        reminders: targets.map((t) => ({ id: t.id, title: t.title })),
+        truncated: r.count > targets.length,
+      };
     },
   });
 }
