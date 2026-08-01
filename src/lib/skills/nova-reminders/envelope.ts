@@ -8,9 +8,6 @@ export function buttonsFor(r: Reminder): ReminderButton[] {
 
   if (r.type === "medication") {
     btns.push({ id: "taken", label: "Taken ✅" });
-    for (const m of r.snoozeOffer.length ? r.snoozeOffer : [10]) {
-      btns.push({ id: `snooze:${m}`, label: `+${m} min ⏰` });
-    }
     btns.push({ id: "skip", label: "Skip ❌" });
     return btns;
   }
@@ -23,9 +20,6 @@ export function buttonsFor(r: Reminder): ReminderButton[] {
 
   // general
   btns.push({ id: "ack", label: "Got it ✅" });
-  for (const m of r.snoozeOffer) {
-    btns.push({ id: `snooze:${m}`, label: `+${m} min ⏰` });
-  }
   return btns;
 }
 

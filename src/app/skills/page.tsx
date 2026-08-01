@@ -59,7 +59,7 @@ const SKILLS: SkillEntry[] = [
     name: "Reminders & Prescriptions",
     category: "Notifications · Telegram",
     description:
-      "General reminders (meetings, birthdays, deadlines) plus medication schedules with Taken/Snooze/Skip acks and prescription intake — snap a prescription photo or paste text and the assistant auto-schedules the meds and follow-up. Delivered via Telegram (@PaperloftAssistantBot). Fair-use cap: 200 active reminders per account, minimum recurrence 1 hour (so the fleet doesn't blow up).",
+      "General reminders (meetings, birthdays, deadlines) plus medication schedules with Taken/Skip acks and prescription intake — snap a prescription photo or paste text and the assistant auto-schedules the meds and follow-up. Delivered via Telegram (@PaperloftAssistantBot). Fair-use cap: 200 active reminders per account, minimum recurrence 5 minutes (so the fleet doesn't blow up).",
     price: "Free · max 200 active",
     needs: "Telegram sign-in",
     publisher: "Globalion (Shreyas, forked from Pakki10/nova-reminders)",

@@ -111,7 +111,7 @@ export function ChatView({
                   <ul className="text-sm text-muted-foreground space-y-1.5">
                     <li>⏰ <span className="text-foreground">Set reminders</span> — <em>&quot;remind me to call mum at 8pm&quot;</em></li>
                     <li>🔁 <span className="text-foreground">Repeating schedules</span> — <em>&quot;every Monday at 9am, take out the bins&quot;</em></li>
-                    <li>💊 <span className="text-foreground">Medication timings + prescription photos</span> — auto-schedule Taken/Snooze/Skip acks</li>
+                    <li>💊 <span className="text-foreground">Medication timings + prescription photos</span> — auto-schedule Taken/Skip acks</li>
                     <li>📱 <span className="text-foreground">Voice notes, photos, PDFs on Telegram</span> — I read them and act</li>
                     <li>🧩 <span className="text-foreground">Bring your own MCP skills</span> — add them from <a href="/skills" className="underline hover:text-foreground">Skills</a></li>
                   </ul>

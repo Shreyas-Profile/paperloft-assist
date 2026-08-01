@@ -109,12 +109,12 @@ function Capabilities() {
     {
       emoji: "🔁",
       title: "Repeating schedules",
-      body: "Daily, weekdays, weekly, monthly — say it however feels natural. Snooze, skip, or mark done from Telegram in one tap.",
+      body: "Daily, weekdays, weekly, monthly — say it however feels natural. Skip or mark done from Telegram in one tap.",
     },
     {
       emoji: "💊",
       title: "Medication timings",
-      body: "Say what to take and when, and I keep the schedule. Great for family members who need a nudge and a Taken/Snooze/Skip check-in.",
+      body: "Say what to take and when, and I keep the schedule. Great for family members who need a nudge and a Taken/Skip check-in.",
     },
     {
       emoji: "📱",
