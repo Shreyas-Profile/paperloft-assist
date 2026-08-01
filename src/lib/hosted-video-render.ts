@@ -88,14 +88,18 @@ const SCENE_SHAPES_HINT =
   "\n\nSCENE SHAPES (exact field names — get these wrong and the call fails):\n" +
   "  • title: { type:'title', copy:'HEADLINE', subtitle?:'OPTIONAL SUB' }\n" +
   "  • stat:  { type:'stat', big:'BIG WORD', small:'small caption', image?:'data:image/…' }\n" +
-  "  • image: { type:'image', src:'https://… OR data:image/…', caption?:'text', fit?:'cover'|'contain', background?:'#0f172a' }\n" +
+  "  • image: { type:'image', src:'data:image/…', caption?:'text', fit?:'cover'|'contain', background?:'#0f172a' }\n" +
   "  • code:  { type:'code', language:'ts', snippet:'const x = 1;', caption?:'text' }\n" +
   "  • cta:   { type:'cta', url:'paperloft.uk', copy:'Try it free.' }\n\n" +
-  "EXAMPLE full ScenePlan for a 20s intro video:\n" +
+  "CRITICAL — images: the ONLY valid `src` / `image` value is a `data:image/...` inline data URI. " +
+  "NEVER guess or fabricate an https URL like 'https://paperloft.uk/assets/foo.png' — those files do not exist and the render will fail with 'couldn't load image'. " +
+  "If the user hasn't handed you a real data URI, OMIT the image/src field entirely and use a title/stat/cta/quote/list scene instead. Text-only scenes always work.\n\n" +
+  "EXAMPLE full ScenePlan for a 20s intro video (text-only, safe default):\n" +
   '  { title:"Hello world demo", targetDurationSec:20, voice:"male-uk",\n' +
   '    script:"Hello world. This is a Paperloft demo. Try it at paperloft dot uk.",\n' +
   '    scenes:[\n' +
   '      {type:"title", copy:"Hello, world", subtitle:"A tiny demo"},\n' +
+  '      {type:"stat", big:"3 skills", small:"live today"},\n' +
   '      {type:"cta", url:"paperloft.uk", copy:"Try it free."}\n' +
   '    ] }';
 
