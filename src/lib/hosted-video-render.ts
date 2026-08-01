@@ -140,7 +140,9 @@ export function makeVideoRenderSkills(userEmail: string) {
 
     video_render: tool({
       description:
-        "Kick off an ASYNC video render. Returns { jobId, statusUrl, videoUrl, creditsQuoted } immediately — the actual render takes 60-300 seconds. Do NOT poll from here (it eats step budget); instead tell the user 'your video will be ready at <videoUrl> in a few minutes' and stop. If they ask later, call video_status({ jobId }) to check." +
+        "Kick off an ASYNC video render. Returns { jobId, statusUrl, videoUrl, creditsQuoted } immediately — the actual render takes 60-300 seconds. Do NOT poll from here (it eats step budget); instead tell the user their video will be ready in a few minutes at the SPECIFIC videoUrl returned by this call. " +
+        "CRITICAL: When you tell the user the URL, PASTE THE EXACT `videoUrl` string from this tool's return value. NEVER template it with square brackets like `[jobId]` or `<url>` or `{videoUrl}` — those are meta-syntax, not literal URLs. If the returned videoUrl is `https://video-render.regiq.in/api/renders/abc123.mp4`, quote exactly that, not `https://paperloft.uk/video/[jobId]` or any other rewrite. " +
+        "If they ask later 'is it done?', call video_status({ jobId }) using the exact jobId this call returned." +
         SCENE_SHAPES_HINT,
       inputSchema: z.object({
         title: z.string().min(1).max(200),
