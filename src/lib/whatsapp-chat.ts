@@ -101,13 +101,27 @@ async function tryAckShortcut(
   } = {
     ackState: matchedState,
     ackAt: new Date(),
-    ackButtonId: matchedState,
+    ackButtonId: matchedState === "snoozed" ? `snooze:${snoozeMinutes ?? 10}` : matchedState,
   };
-  // Snooze needs a child reminder-instance created for the new fire time — the
-  // scheduler tick will pick it up. Rather than duplicate that logic here,
-  // just mark the ack; the scheduler's re-fire path handles snoozes on its
-  // next tick if the reminder is still active. For now, treat snooze as an
-  // ack + let the LLM know to reschedule if the user wanted a specific offset.
+
+  if (matchedState === "snoozed") {
+    // Create a child ReminderInstance at now + N minutes. The scheduler's
+    // fire loop finds pending instances by (reminderId, scheduledFor) — this
+    // one has no firedAt yet, so the next tick will fire it and the ack
+    // buttons will render again for the fresh instance.
+    const minutes = snoozeMinutes ?? 10;
+    const newDue = new Date(Date.now() + minutes * 60_000);
+    const child = await prisma.reminderInstance.create({
+      data: {
+        reminderId: instance.reminderId,
+        userId: userEmail,
+        scheduledFor: newDue,
+        ackState: "pending",
+      },
+    });
+    updates.snoozedToInstanceId = child.id;
+  }
+
   await prisma.reminderInstance.update({
     where: { id: instance.id },
     data: updates,
@@ -115,7 +129,7 @@ async function tryAckShortcut(
 
   if (matchedState === "acked") return "✅ Logged. Nice work.";
   if (matchedState === "skipped") return "⏭️ Skipped. No worries.";
-  return `⏰ Snoozed for ${snoozeMinutes ?? 10} min. (Note: snooze re-fire is on the roadmap — for now this just marks the original as acknowledged.)`;
+  return `⏰ Snoozed for ${snoozeMinutes ?? 10} min. I'll ping you again then.`;
 }
 
 /**
