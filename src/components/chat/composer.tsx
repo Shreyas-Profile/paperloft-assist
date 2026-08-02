@@ -4,7 +4,7 @@
 // Auto-resizes vertically up to a max height.
 //
 // File attach flow: paperclip icon opens picker → POST to /api/docs/upload
-// with the file → paperloft proxies it to docs.regiq.in using the user's
+// with the file → paperloft proxies it to docs.globalion.in using the user's
 // docs-mcp key (SkillConnection) → returns docId. When the user sends the
 // message, we prepend a short "[Attached: filename.pdf (docId: xxx, status)]"
 // line so the LLM knows to poll docs_get and use docs_search.

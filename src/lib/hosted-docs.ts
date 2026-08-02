@@ -20,7 +20,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { getSkillConnection } from "./skill-provisioning";
 
-const DOCS_MCP_URL = process.env.DOCS_MCP_URL ?? "https://docs.regiq.in/api/mcp";
+const DOCS_MCP_URL = process.env.DOCS_MCP_URL ?? "https://docs.globalion.in/api/mcp";
 
 interface McpEnvelope<T> {
   jsonrpc: "2.0";

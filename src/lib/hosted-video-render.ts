@@ -16,7 +16,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 const VIDEO_RENDER_MCP_URL =
-  process.env.VIDEO_RENDER_MCP_URL ?? "https://video-render.regiq.in/api/mcp";
+  process.env.VIDEO_RENDER_MCP_URL ?? "https://video-render.globalion.in/api/mcp";
 const VIDEO_RENDER_MCP_KEY = process.env.VIDEO_RENDER_MCP_KEY;
 
 interface McpEnvelope<T> {
@@ -145,7 +145,7 @@ export function makeVideoRenderSkills(userEmail: string) {
     video_render: tool({
       description:
         "Kick off an ASYNC video render. Returns { jobId, statusUrl, videoUrl, creditsQuoted } immediately — the actual render takes 60-300 seconds. Do NOT poll from here (it eats step budget); instead tell the user their video will be ready in a few minutes at the SPECIFIC videoUrl returned by this call. " +
-        "CRITICAL — URL formatting: PASTE the exact `videoUrl` string as a PLAIN URL on its own line. NEVER wrap it in markdown: no `**bold**`, no `[link](url)`, no backticks. Telegram's link parser will treat `**` as part of the URL and the click 404s. NEVER template it either (`[jobId]`, `<url>`, `{videoUrl}` are all wrong — those are meta-syntax, not real values). If the returned videoUrl is `https://video-render.regiq.in/api/renders/abc123.mp4`, your message should contain that exact string on its own line — nothing before, nothing after, no formatting. " +
+        "CRITICAL — URL formatting: PASTE the exact `videoUrl` string as a PLAIN URL on its own line. NEVER wrap it in markdown: no `**bold**`, no `[link](url)`, no backticks. Telegram's link parser will treat `**` as part of the URL and the click 404s. NEVER template it either (`[jobId]`, `<url>`, `{videoUrl}` are all wrong — those are meta-syntax, not real values). If the returned videoUrl is `https://video-render.globalion.in/api/renders/abc123.mp4`, your message should contain that exact string on its own line — nothing before, nothing after, no formatting. " +
         "If they ask later 'is it done?', call video_status({ jobId }) using the exact jobId this call returned." +
         SCENE_SHAPES_HINT,
       inputSchema: z.object({
@@ -195,7 +195,7 @@ export function makeVideoRenderSkills(userEmail: string) {
           throw new Error("VIDEO_RENDER_MCP_KEY not set on paperloft server");
         }
         const res = await fetch(
-          `https://video-render.regiq.in/api/jobs/${encodeURIComponent(jobId)}`,
+          `https://video-render.globalion.in/api/jobs/${encodeURIComponent(jobId)}`,
           {
             headers: {
               Authorization: `Bearer ${VIDEO_RENDER_MCP_KEY}`,
