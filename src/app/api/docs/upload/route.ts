@@ -3,7 +3,7 @@
 // Proxies a chat-composer file upload to docs-mcp. Reads the multipart file
 // out of the request, looks up the current user's docs-mcp SkillConnection
 // (must have toggled Docs on at /skills first), and forwards to
-// https://docs.regiq.in/api/upload with THEIR Bearer key. Returns the docId
+// https://docs.globalion.in/api/upload with THEIR Bearer key. Returns the docId
 // so the chat client can drop a reference into the outgoing user message.
 //
 // Guarantees isolation: paperloft never uses a shared docs-mcp key here —
@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const DOCS_MCP_UPLOAD_URL =
-  process.env.DOCS_MCP_UPLOAD_URL ?? "https://docs.regiq.in/api/upload";
+  process.env.DOCS_MCP_UPLOAD_URL ?? "https://docs.globalion.in/api/upload";
 
 export async function POST(req: Request) {
   const session = await auth();

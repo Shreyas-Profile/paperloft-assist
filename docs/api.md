@@ -122,7 +122,7 @@ bot that a specific Telegram chat is theirs. Auth-required.
 
 ### `POST /api/cron/fire`
 
-Called by cron.regiq.in with an HMAC-signed payload when a scheduled
+Called by cron.globalion.in with an HMAC-signed payload when a scheduled
 prompt or reminder is due. Signature verified against
 `CRON_WEBHOOK_SIGNING_SECRET`.
 
@@ -173,7 +173,7 @@ Removes a BYO skill. Encrypted headers are wiped.
 ### `POST /api/platform/provision-user`
 
 Provisions a sub-account on the paired hosted-MCP skill server
-(docs.regiq.in etc.) for the current user. Runs once per skill on
+(docs.globalion.in etc.) for the current user. Runs once per skill on
 first enable.
 
 ---
@@ -203,7 +203,7 @@ Update a support ticket's status or trigger a fresh AI triage.
 
 ### `POST /api/docs/upload`
 
-Proxies an uploaded file to docs.regiq.in using the current user's
+Proxies an uploaded file to docs.globalion.in using the current user's
 sub-account key. Auth-required. Body is multipart/form-data with a
 `file` field.
 

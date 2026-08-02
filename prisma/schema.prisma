@@ -71,7 +71,7 @@ model EnabledSkill {
 }
 
 // Sub-account credentials paperloft provisions on external MCP skill servers
-// (docs.regiq.in, cron.regiq.in, ...) on behalf of paperloft users.
+// (docs.globalion.in, cron.globalion.in, ...) on behalf of paperloft users.
 // One row per (userEmail, skillId) once the user has enabled that skill.
 // `remoteApiKey` is stored plaintext — the skill server only knows its sha256
 // hash and cannot re-derive the raw. Rotating on the skill side means we

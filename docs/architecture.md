@@ -25,9 +25,9 @@ flowchart LR
     subgraph "External"
         OR[OpenRouter<br/>LLM]
         TG[Telegram Bot API]
-        Docs[docs.regiq.in<br/>RAG]
-        Cron[cron.regiq.in]
-        Tor[tor.regiq.in]
+        Docs[docs.globalion.in<br/>RAG]
+        Cron[cron.globalion.in]
+        Tor[tor.globalion.in]
     end
 
     Browser -- HTTPS via Cloudflare tunnel --> Web
@@ -74,9 +74,9 @@ has no audio input channel).
 
 **Hosted MCP skills** — separate services on the same Hetzner box
 that we call over HTTPS as a paying tenant:
-- `docs.regiq.in` — RAG over uploaded documents
-- `cron.regiq.in` — HMAC-signed webhook cron
-- `tor.regiq.in` — anonymous fetch through Tor exits
+- `docs.globalion.in` — RAG over uploaded documents
+- `cron.globalion.in` — HMAC-signed webhook cron
+- `tor.globalion.in` — anonymous fetch through Tor exits
 
 Each skill has a per-user API key stored (encrypted with
 `USER_SKILL_ENCRYPTION_KEY`) in `SkillConnection`.
@@ -94,7 +94,7 @@ history → generateText loop → prisma write → stream back.
 transcribeVoice / describeImage / summarisePdf → convert to plain text
 → handleTelegramMessage as if the user had typed it.
 
-**Reminder fire:** cron.regiq.in → HMAC-signed POST →
+**Reminder fire:** cron.globalion.in → HMAC-signed POST →
 `/api/cron/fire` → verify signature → run scheduler tick → for each
 due reminder, resolve delivery channel → Telegram API send.
 

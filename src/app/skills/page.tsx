@@ -39,7 +39,7 @@ const SKILLS: SkillEntry[] = [
     name: "Docs (RAG)",
     category: "External MCP · Globalion",
     description:
-      "Upload any Word/Excel/PDF/PowerPoint and query it back with page citations. Vision-model extraction handles scans, charts, and tables — nothing gets lost in plain-text stripping. On enable, we provision you a private tenant on docs.regiq.in — your docs are never visible to other paperloft users. First 100 pages free from Paperloft's platform pool; more available on request.",
+      "Upload any Word/Excel/PDF/PowerPoint and query it back with page citations. Vision-model extraction handles scans, charts, and tables — nothing gets lost in plain-text stripping. On enable, we provision you a private tenant on docs.globalion.in — your docs are never visible to other paperloft users. First 100 pages free from Paperloft's platform pool; more available on request.",
     price: "100 pages free · overage from Paperloft pool",
     needs: "Google sign-in",
     publisher: "Globalion (Shreyas)",

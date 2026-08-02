@@ -1,7 +1,7 @@
 // Paperloft-side wrapper around globalion/cron-mcp.
 //
 // Same pattern as hosted-browser.ts: the cron-mcp service is a separate MCP
-// server on Hetzner (cron.regiq.in). Paperloft calls it as an MCP client
+// server on Hetzner (cron.globalion.in). Paperloft calls it as an MCP client
 // (JSON-RPC over HTTPS with a service Bearer key). All paperloft users
 // share one cron-mcp account — their identity is stamped on jobs via the
 // `metadata.userEmail` field, and the shared callback URL routes back to
@@ -16,7 +16,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-const CRON_MCP_URL = process.env.CRON_MCP_URL ?? "https://cron.regiq.in/api/mcp";
+const CRON_MCP_URL = process.env.CRON_MCP_URL ?? "https://cron.globalion.in/api/mcp";
 const CRON_MCP_KEY = process.env.CRON_MCP_KEY;
 const CALLBACK_URL = process.env.CRON_CALLBACK_URL ?? "https://paperloft.uk/api/cron/fire";
 

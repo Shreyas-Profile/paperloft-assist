@@ -22,7 +22,7 @@ third-party trackers.
 | Reminders | Title, due time, recurrence, medication metadata, ack state | The reminder itself and the fire schedule |
 | Prescription uploads | PDF or image files you send, plus the extracted structured data (medication, dose, times) | The vision-model output the reminder scheduler runs off of |
 | Support tickets | Name, optional email, ticket body, plus AI triage output | So you can raise bugs / requests and I can reply |
-| Skill connections | For hosted skills (docs.regiq.in etc.), a per-user API key stored encrypted with AES-256-GCM | So Paperloft can call those skills as you |
+| Skill connections | For hosted skills (docs.globalion.in etc.), a per-user API key stored encrypted with AES-256-GCM | So Paperloft can call those skills as you |
 | Operational logs | Timestamps, tool-call names, LLM latency, error messages | Debugging the app; auto-rotated after 14 days |
 
 ## What we don't collect

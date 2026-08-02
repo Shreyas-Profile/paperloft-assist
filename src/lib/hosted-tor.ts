@@ -18,7 +18,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { getSkillConnection } from "./skill-provisioning";
 
-const TOR_MCP_URL = process.env.TOR_MCP_URL ?? "https://tor.regiq.in/api/mcp";
+const TOR_MCP_URL = process.env.TOR_MCP_URL ?? "https://tor.globalion.in/api/mcp";
 
 interface McpEnvelope<T> {
   jsonrpc: "2.0";

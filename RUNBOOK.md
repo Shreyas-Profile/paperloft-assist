@@ -85,13 +85,13 @@ docker logs -f paperloft-assist-web 2>&1 | grep -iE 'tg-webhook|telegram-chat'
 ## Reminders not firing
 
 ```bash
-# 1. Confirm cron.regiq.in is actually poking us. Its callbacks land
+# 1. Confirm cron.globalion.in is actually poking us. Its callbacks land
 #    at /api/cron/fire and are HMAC-signed.
 ssh root@37.27.193.248
 docker logs --tail 200 paperloft-assist-web | grep -iE 'cron|reminder.*fire'
 
 # 2. If cron isn't calling in at all, check the CRON_MCP_KEY on
-#    cron.regiq.in matches ours. Contact Pawan if cron.regiq.in is
+#    cron.globalion.in matches ours. Contact Pawan if cron.globalion.in is
 #    itself down — it's his box.
 
 # 3. Manually inspect pending reminders:
@@ -161,8 +161,8 @@ Run workflow.
 
 ## Contact routes when it's really bad
 
-- **Pawan** (@pakki10) — owns cron.regiq.in, docs.regiq.in, tor.regiq.in,
-  video-render.regiq.in. Contact if any of those show down on /status.
+- **Pawan** (@pakki10) — owns cron.globalion.in, docs.globalion.in, tor.globalion.in,
+  video-render.globalion.in. Contact if any of those show down on /status.
 - **Cloudflare status** — [cloudflarestatus.com](https://www.cloudflarestatus.com/)
   if the tunnel is misbehaving.
 - **Hetzner status** — [status.hetzner.com](https://status.hetzner.com/)
