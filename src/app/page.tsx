@@ -14,6 +14,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { MarketingChat } from "@/components/marketing-chat";
 
 const OWNER_EMAIL = "shreyas.pavuluri@gmail.com";
 
@@ -30,6 +31,10 @@ export default async function LandingPage() {
       <ComingSoon />
       <Questions />
       <Footer />
+      {/* Floating chat widget — visitors ask questions or share feedback.
+          Feedback goes to Shreyas via the existing /api/support pipeline
+          (Telegram DM to admins with linked accounts). */}
+      <MarketingChat />
     </main>
   );
 }
