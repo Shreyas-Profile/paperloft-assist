@@ -56,19 +56,32 @@ export async function notifyAdminsOfTicket(input: {
       ? `${input.submitterName} <${input.submitterEmail}>`
       : input.submitterName;
 
+  // Feedback body first, bold + quoted so it's impossible to miss in the
+  // Telegram thread. Metadata (ticket #, category, AI take, submitter,
+  // files, notes) comes AFTER — a bad ticket format used to bury the
+  // actual feedback under the triage summary, which meant the admin had
+  // to hunt for the user's own words.
+  //
+  // MarkdownV2 has hard escaping rules; the bot uses classic Markdown
+  // (parse_mode=Markdown), so we escape backticks + asterisks only, keep
+  // the rest as-is, and use blockquote formatting (>) for the body.
+  const escapeForMd = (s: string) =>
+    s.replace(/([`*_])/g, "\\$1").replace(/\n/g, "\n> ");
+  const quotedBody = "> *" + escapeForMd(input.body.trim()) + "*";
+
   const filesLine =
     input.triage.suggestedFiles.length > 0
-      ? "\nSuggested files: " +
+      ? "\n📎 Files: " +
         input.triage.suggestedFiles.map((f) => `\`${f}\``).join(", ")
       : "";
-  const notesLine = input.triage.notes ? `\n_Notes:_ ${input.triage.notes}` : "";
+  const notesLine = input.triage.notes ? `\n📝 _${input.triage.notes}_` : "";
 
   const text =
-    `🎫 *Ticket #${input.ticketNumber}* [${priorityLabel} · ${categoryLabel}]\n` +
-    `*${input.title}*\n\n` +
-    `_From:_ ${reporter}\n\n` +
-    `${input.triage.summary}${filesLine}${notesLine}\n\n` +
-    `Full ticket: ${adminUrlFor(input.ticketId)}`;
+    `💬 *Feedback #${input.ticketNumber}* — ${priorityLabel} · ${categoryLabel}\n\n` +
+    `${quotedBody}\n\n` +
+    `👤 ${reporter}\n` +
+    `🎯 _${input.triage.summary}_${filesLine}${notesLine}\n\n` +
+    `↗️ ${adminUrlFor(input.ticketId)}`;
 
   await Promise.allSettled(
     adminLinks.map((l) => sendTelegramToChatId(l.chatId, text)),

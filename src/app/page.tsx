@@ -18,9 +18,17 @@ import { MarketingChat } from "@/components/marketing-chat";
 
 const OWNER_EMAIL = "shreyas.pavuluri@gmail.com";
 
-export default async function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preview?: string }>;
+}) {
   const session = await auth();
-  if (session?.user) redirect("/chat");
+  // Signed-in users normally get bounced straight to /chat. `?preview=1`
+  // bypasses the redirect so admins can see the marketing page (and its
+  // chat widget) without signing out.
+  const { preview } = await searchParams;
+  if (session?.user && preview !== "1") redirect("/chat");
 
   return (
     <main className="min-h-screen bg-background text-foreground text-[17px] leading-relaxed">
