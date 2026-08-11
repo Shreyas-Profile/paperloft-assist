@@ -28,6 +28,20 @@ export const SKILL_TOOLS: Record<string, string[]> = {
     "docs_delete",
     "docs_balance",
   ],
+  // Email (email-mcp) — read + send Gmail on the user's behalf. Aggregator
+  // pattern like docs: paperloft provisions a sub-account on
+  // email.regiq.in and stores the key in SkillConnection. First-time users
+  // must ALSO complete Google OAuth on email.regiq.in itself (grants
+  // gmail.send + gmail.readonly to their sub-account). The provisioning
+  // call handles the paperloft side; the OAuth handoff is one extra click.
+  email_mcp: [
+    "list_recent_emails",
+    "search_emails",
+    "get_email",
+    "send_email",
+    "reply_to_email",
+    "mark_read",
+  ],
   // Nova-reminders skill — general/medication/appointment reminders plus
   // prescription intake (image/PDF/text).
   reminders: [

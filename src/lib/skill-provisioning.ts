@@ -37,6 +37,12 @@ const SKILL_ENDPOINTS: Record<string, SkillEndpoint> = {
     grantUrl: "https://tor.globalion.in/api/platform/grant-credits",
     sharedSecretEnv: "TOR_MCP_PLATFORM_SECRET",
   },
+  email_mcp: {
+    skillId: "email_mcp",
+    provisionUrl: "https://email.regiq.in/api/platform/provision-user",
+    grantUrl: "https://email.regiq.in/api/platform/grant-credits",
+    sharedSecretEnv: "EMAIL_MCP_PLATFORM_SECRET",
+  },
 };
 
 export interface ProvisionResult {

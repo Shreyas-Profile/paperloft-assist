@@ -64,6 +64,16 @@ const SKILLS: SkillEntry[] = [
     needs: "Telegram sign-in",
     publisher: "Globalion (Shreyas, forked from Pakki10/nova-reminders)",
   },
+  {
+    id: "email_mcp",
+    name: "Email (Gmail)",
+    category: "External MCP · Globalion",
+    description:
+      "Read, search, draft, send, and reply to Gmail from chat. One-off Google sign-in on email.regiq.in grants scope; from then on the assistant can triage your inbox and send on your behalf — always asking you to confirm before actually sending. On enable, we provision you a private tenant on email.regiq.in; your Gmail tokens live only on that server. First 100 emails free from Paperloft's platform pool.",
+    price: "100 emails free · overage from Paperloft pool",
+    needs: "Google sign-in on email.regiq.in",
+    publisher: "Globalion (Shreyas)",
+  },
 ];
 
 export default async function SkillsPage() {

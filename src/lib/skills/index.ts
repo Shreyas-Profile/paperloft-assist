@@ -8,6 +8,7 @@ import { findOpportunitiesTool } from "./find-opportunities";
 import { makeBrowserSkills } from "../hosted-browser";
 import { makeCronSkills } from "../hosted-cron";
 import { makeDocsSkills } from "../hosted-docs";
+import { makeEmailSkills } from "../hosted-email";
 import { makeTorSkills } from "../hosted-tor";
 import { makeVideoRenderSkills } from "../hosted-video-render";
 
@@ -29,6 +30,7 @@ export function makeUserScopedSkills(userEmail: string) {
     ...makeBrowserSkills(userEmail),
     ...makeCronSkills(userEmail),
     ...makeDocsSkills(userEmail),
+    ...makeEmailSkills(userEmail),
     ...makeTorSkills(userEmail),
     ...makeVideoRenderSkills(userEmail),
   } as const;

@@ -19,11 +19,12 @@ const KNOWN_SKILLS = new Set([
   "reminders",
   "docs_mcp",
   "tor_mcp",
+  "email_mcp",
 ]);
 
 // External skills that need paperloft to provision a sub-account on their
 // MCP server before the tools work.
-const SKILLS_NEEDING_PROVISION = new Set(["docs_mcp", "tor_mcp"]);
+const SKILLS_NEEDING_PROVISION = new Set(["docs_mcp", "tor_mcp", "email_mcp"]);
 
 export async function POST(
   request: Request,
