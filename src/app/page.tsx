@@ -14,21 +14,12 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { MarketingChat } from "@/components/marketing-chat";
 
 const OWNER_EMAIL = "shreyas.pavuluri@gmail.com";
 
-export default async function LandingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ preview?: string }>;
-}) {
+export default async function LandingPage() {
   const session = await auth();
-  // Signed-in users normally get bounced straight to /chat. `?preview=1`
-  // bypasses the redirect so admins can see the marketing page (and its
-  // chat widget) without signing out.
-  const { preview } = await searchParams;
-  if (session?.user && preview !== "1") redirect("/chat");
+  if (session?.user) redirect("/chat");
 
   return (
     <main className="min-h-screen bg-background text-foreground text-[17px] leading-relaxed">
@@ -39,10 +30,6 @@ export default async function LandingPage({
       <ComingSoon />
       <Questions />
       <Footer />
-      {/* Floating chat widget — visitors ask questions or share feedback.
-          Feedback goes to Shreyas via the existing /api/support pipeline
-          (Telegram DM to admins with linked accounts). */}
-      <MarketingChat />
     </main>
   );
 }

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { MarketingChat } from "@/components/marketing-chat";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,12 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
+          {/* Floating chat/feedback widget on EVERY page — visitors and
+              signed-in users alike. Two jobs: answer questions about
+              Paperloft, and forward feedback to Shreyas on Telegram (via
+              /api/support). Fixed-position, high z-index so it doesn't
+              interfere with page content. */}
+          <MarketingChat />
         </ThemeProvider>
       </body>
     </html>
