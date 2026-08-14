@@ -26,7 +26,7 @@ interface Message {
 const GREETING: Message = {
   role: "assistant",
   content:
-    "Hi! 👋 I'm the Paperloft guide. Ask me anything about the assistant — or share feedback and I'll pass it to Shreyas.\n\n[Try it →](/signin)",
+    "Hey — I'm Papi 👋 Ask me anything about Paperloft, poke around, or gripe at me. Real feedback goes straight to Shreyas on Telegram, so let it rip.\n\nWhat's on your mind?\n\n[Try it free →](/signin)",
 };
 
 /**
@@ -219,13 +219,13 @@ export function MarketingChat() {
                 P
               </div>
               <div className="leading-tight">
-                <div className="text-sm font-semibold">Ask Paperloft</div>
+                <div className="text-sm font-semibold">Papi</div>
                 <div className="text-[11px] text-neutral-400">
                   <span
                     className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle"
                     style={{ boxShadow: "0 0 0 3px rgba(16,185,129,.2)" }}
                   />
-                  Answers · feedback goes to Shreyas
+                  your Paperloft sidekick · feedback → Shreyas
                 </div>
               </div>
             </div>
@@ -283,7 +283,7 @@ export function MarketingChat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={busy}
-              placeholder="Ask about Paperloft — or share feedback…"
+              placeholder="Ask Papi anything — or share what's broken…"
               className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-orange-500/50 disabled:opacity-50"
             />
             <button
