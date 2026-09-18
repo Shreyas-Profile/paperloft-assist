@@ -35,6 +35,16 @@ type SkillEntry = {
 // Hetzner — same names, always available, no local machine needed.
 const SKILLS: SkillEntry[] = [
   {
+    id: "projectdoc_mcp",
+    name: "ProjectDoc",
+    category: "External MCP · Globalion",
+    description:
+      "Turn any project brief into a full docs pack in ~30 seconds: project plan (vision, success criteria, milestones, team, risks), user flows (personas + happy/unhappy paths), technical architecture (stack, data model, integrations, ASCII diagram), and a cost report (manual vs Nova+BuildOps in ₹). No account needed — powered by projectdoc.globalion.in.",
+    price: "Free",
+    needs: "Google sign-in",
+    publisher: "Globalion (Shreyas)",
+  },
+  {
     id: "docs_mcp",
     name: "Docs (RAG)",
     category: "External MCP · Globalion",

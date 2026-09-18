@@ -15,6 +15,10 @@ export const SKILL_TOOLS: Record<string, string[]> = {
   // ScenePlan. Uses a shared paperloft-service key (VIDEO_RENDER_MCP_KEY)
   // rather than per-user provisioning (upstream has no /provision-user
   // endpoint yet). Jobs are tagged with metadata.userEmail for accounting.
+  // ProjectDoc — turns a project brief into 4 Markdown artefacts (plan,
+  // flows, architecture, cost report). Stateless upstream, no per-user
+  // provisioning — same shared-endpoint pattern as cron-mcp.
+  projectdoc_mcp: ["projectdoc_generate", "projectdoc_generate_one"],
   video_render_mcp: ["video_plan", "video_render", "video_status"],
   // Docs (docs-mcp) — vector RAG over any uploaded document. Toggling this
   // on provisions a sub-account on docs.globalion.in via /api/platform/provision-user
