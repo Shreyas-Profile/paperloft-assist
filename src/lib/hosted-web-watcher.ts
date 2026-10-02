@@ -205,7 +205,7 @@ export async function pollDue(): Promise<PollResult[]> {
   const now = Date.now();
   const due = all.filter((w) => {
     if (!w.lastCheckedAt) return true;
-    const next = w.lastCheckedAt.getTime() + w.intervalHours * 3600_000;
+    const next = w.lastCheckedAt.getTime() + w.intervalMinutes * 60_000;
     return next <= now;
   });
   const results: PollResult[] = [];
@@ -236,13 +236,13 @@ export function makeWebWatcherSkills(userEmail: string) {
           .max(80)
           .optional()
           .describe("Optional short name shown in notifications, e.g. 'UCAS portal' or 'ACME careers'."),
-        intervalHours: z
+        intervalMinutes: z
           .number()
           .int()
           .min(1)
-          .max(168)
-          .default(3)
-          .describe("How often to poll in hours. Default 3. Minimum 1, maximum 168 (1 week)."),
+          .max(10080)
+          .default(180)
+          .describe("How often to poll in minutes. Default 180 (3 hours). Minimum 1 minute, maximum 10080 (1 week). Interpret user requests like 'every 6 hours' as 360, 'every 2 days' as 2880."),
       }),
       execute: async (input) => {
         const url = normalizeUrl(input.url);
@@ -266,7 +266,7 @@ export function makeWebWatcherSkills(userEmail: string) {
             userEmail,
             url,
             label: input.label ?? null,
-            intervalHours: input.intervalHours,
+            intervalMinutes: input.intervalMinutes,
           },
         });
         const link = await prisma.telegramLink.findUnique({ where: { userEmail } });
@@ -275,7 +275,7 @@ export function makeWebWatcherSkills(userEmail: string) {
           id: w.id,
           url: w.url,
           label: w.label,
-          intervalHours: w.intervalHours,
+          intervalMinutes: w.intervalMinutes,
           telegramLinked: !!link,
           note: link
             ? "First poll will establish a baseline (no notification). Future changes will DM you on Telegram."
@@ -298,7 +298,7 @@ export function makeWebWatcherSkills(userEmail: string) {
             id: r.id,
             url: r.url,
             label: r.label,
-            intervalHours: r.intervalHours,
+            intervalMinutes: r.intervalMinutes,
             active: r.active,
             lastCheckedAt: r.lastCheckedAt?.toISOString() ?? null,
             lastChangedAt: r.lastChangedAt?.toISOString() ?? null,
