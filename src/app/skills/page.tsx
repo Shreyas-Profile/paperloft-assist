@@ -84,6 +84,16 @@ const SKILLS: SkillEntry[] = [
     needs: "Google sign-in on email.regiq.in",
     publisher: "Globalion (Shreyas)",
   },
+  {
+    id: "web_watcher",
+    name: "Web watcher",
+    category: "Notifications · Telegram",
+    description:
+      "Watch any webpage for changes and get a Telegram DM when something updates. Useful for job pages, exam results, UCAS updates, product restocks, pricing pages, competitor sites — anything you'd otherwise reload manually every day. Just tell the assistant 'watch example.com every 6 hours' in chat; the first poll establishes a baseline (no notification), then every change after that pings you. No external account needed.",
+    price: "Free",
+    needs: "Telegram sign-in (for notifications)",
+    publisher: "Globalion (Shreyas)",
+  },
 ];
 
 export default async function SkillsPage() {

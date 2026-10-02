@@ -12,6 +12,7 @@ import { makeEmailSkills } from "../hosted-email";
 import { makeTorSkills } from "../hosted-tor";
 import { makeProjectDocSkills } from "../hosted-projectdoc";
 import { makeVideoRenderSkills } from "../hosted-video-render";
+import { makeWebWatcherSkills } from "../hosted-web-watcher";
 
 // Provider-agnostic base skills (no per-user context needed).
 export const skills = {
@@ -35,5 +36,6 @@ export function makeUserScopedSkills(userEmail: string) {
     ...makeTorSkills(userEmail),
     ...makeProjectDocSkills(userEmail),
     ...makeVideoRenderSkills(userEmail),
+    ...makeWebWatcherSkills(userEmail),
   } as const;
 }

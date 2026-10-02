@@ -46,6 +46,11 @@ export const SKILL_TOOLS: Record<string, string[]> = {
     "reply_to_email",
     "mark_read",
   ],
+  // Web-watcher skill — poll any URL on a schedule, DM the user on Telegram
+  // when something changes (new heading, new link, body hash change).
+  // Paperloft-native: no external MCP, data lives in the WebWatcher table,
+  // polled by /api/web-watcher/poll on a hosted cron.
+  web_watcher: ["web_watcher_add", "web_watcher_list", "web_watcher_remove"],
   // Nova-reminders skill — general/medication/appointment reminders plus
   // prescription intake (image/PDF/text).
   reminders: [

@@ -297,3 +297,32 @@ model SignInCode {
   @@index([expiresAt])
   @@map("sign_in_codes")
 }
+
+// Web-watcher skill — one row per URL the user is watching.
+// Polled periodically by /api/web-watcher/poll (triggered either by a
+// hosted cron job or by the Vercel/Next cron). Each poll hashes the body,
+// extracts h1/h2/h3 headings and in-scope links, diffs against last
+// snapshot, and sends a Telegram DM when something changed.
+model WebWatcher {
+  id             String   @id @default(cuid())
+  userEmail      String
+  url            String
+  label          String?  // optional human-readable name
+  intervalHours  Int      @default(3)  // minimum 1, maximum 168 (1 week)
+
+  // Snapshot state — null until first successful poll
+  lastHash       String?
+  lastHeadings   Json?    // string[]
+  lastLinks      Json?    // string[]
+  lastCheckedAt  DateTime?
+  lastChangedAt  DateTime?
+  lastError      String?
+
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userEmail])
+  @@index([active, lastCheckedAt])
+  @@map("web_watchers")
+}

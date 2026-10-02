@@ -21,6 +21,7 @@ const KNOWN_SKILLS = new Set([
   "tor_mcp",
   "email_mcp",
   "projectdoc_mcp",
+  "web_watcher",
 ]);
 
 // External skills that need paperloft to provision a sub-account on their
